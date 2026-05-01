@@ -1,0 +1,1665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DataMask — Research Data Anonymizer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+
+/* === RESET & ROOT VARIABLES ========================================== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Surfaces */
+  --bg:       #0c0c0f;
+  --surface:  #141417;
+  --surface2: #1c1c21;
+  --surface3: #242429;
+
+  /* Borders */
+  --border:  rgba(255, 255, 255, 0.06);
+  --border2: rgba(255, 255, 255, 0.12);
+
+  /* Text */
+  --text:  #eeeef2;
+  --muted: #77778a;
+
+  /* Accent palette */
+  --green:  #6ee7a0;
+  --blue:   #60c8f0;
+  --amber:  #f5a742;
+  --red:    #f07070;
+  --purple: #b48cf5;
+
+  /* Tinted backgrounds */
+  --green-bg:  rgba(110, 231, 160, 0.08);
+  --blue-bg:   rgba(96,  200, 240, 0.08);
+  --amber-bg:  rgba(245, 167,  66, 0.08);
+  --red-bg:    rgba(240, 112, 112, 0.08);
+  --purple-bg: rgba(180, 140, 245, 0.08);
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Transitions */
+  --tx-fast: 0.15s ease;
+  --tx-std:  0.25s ease;
+
+  /* Z-index layers */
+  --z-modal: 900;
+  --z-toast: 1000;
+}
+
+/* === BASE / TYPOGRAPHY =============================================== */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* === LAYOUT: HEADER ================================================== */
+header {
+  border-bottom: 1px solid var(--border);
+  padding: 1.1rem 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 100;
+}
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2.5s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.hbadge {
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  background: var(--green-bg);
+  color: var(--green);
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  border: 1px solid rgba(110, 231, 160, 0.2);
+}
+
+/* === LAYOUT: MAIN + STEPS BAR ======================================= */
+main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2rem 2rem 5rem;
+}
+.steps {
+  display: flex;
+  margin-bottom: 2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.step {
+  flex: 1;
+  padding: 0.65rem 1rem;
+  font-size: 11.5px;
+  font-family: 'DM Mono', monospace;
+  color: var(--muted);
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: all var(--tx-std);
+  white-space: nowrap;
+}
+.step:last-child { border-right: none; }
+.step.active { background: var(--surface2); color: var(--green); }
+.step.done   { color: var(--green); opacity: 0.55; }
+.step-num {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  flex-shrink: 0;
+}
+.step.done .step-num { background: var(--green); color: #000; border-color: var(--green); }
+
+/* === PANELS ========================================================= */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  margin-bottom: 1.25rem;
+  display: none;
+}
+.panel.visible { display: block; }
+.panel-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 0.35rem;
+}
+.panel-sub { font-size: 13px; color: var(--muted); margin-bottom: 1.5rem; line-height: 1.6; }
+
+/* === UPLOAD ZONE ==================================================== */
+.upload-zone {
+  border: 1.5px dashed var(--border2);
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--tx-std);
+  position: relative;
+}
+.upload-zone:hover,
+.upload-zone.drag-over { border-color: var(--green); background: var(--green-bg); }
+.upload-zone input {
+  position: absolute; inset: 0;
+  opacity: 0; cursor: pointer;
+  width: 100%; height: 100%;
+}
+.upload-icon { font-size: 2.2rem; margin-bottom: 0.85rem; display: block; }
+.upload-zone p  { color: var(--muted); font-size: 14px; }
+.upload-zone strong { color: var(--green); font-weight: 500; }
+
+.paste-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0 0.75rem;
+}
+.paste-divider hr { flex: 1; border: none; border-top: 1px solid var(--border); }
+.paste-divider span {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 0.04em;
+}
+
+/* === MODE CARDS ===================================================== */
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+.mode-card {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all var(--tx-std);
+  position: relative;
+  overflow: hidden;
+}
+.mode-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 12px 12px 0 0;
+  opacity: 0;
+  transition: opacity var(--tx-std);
+}
+.mode-lite::before   { background: var(--blue); }
+.mode-strong::before { background: var(--amber); }
+.mode-vault::before  { background: var(--purple); }
+.mode-card:hover { border-color: var(--border2); }
+.mode-card.selected.mode-lite   { border-color: var(--blue);   background: var(--blue-bg); }
+.mode-card.selected.mode-strong { border-color: var(--amber);  background: var(--amber-bg); }
+.mode-card.selected.mode-vault  { border-color: var(--purple); background: var(--purple-bg); }
+.mode-card.selected::before { opacity: 1; }
+.mode-icon { font-size: 1.5rem; margin-bottom: 0.6rem; display: block; }
+.mode-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.9rem; margin-bottom: 0.3rem; }
+.mode-lite .mode-name   { color: var(--blue); }
+.mode-strong .mode-name { color: var(--amber); }
+.mode-vault .mode-name  { color: var(--purple); }
+.mode-desc { font-size: 12px; color: var(--muted); line-height: 1.55; }
+.mode-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-family: 'DM Mono', monospace;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+  letter-spacing: 0.04em;
+}
+.mode-lite .mode-pill   { background: var(--blue-bg);   color: var(--blue); }
+.mode-strong .mode-pill { background: var(--amber-bg);  color: var(--amber); }
+.mode-vault .mode-pill  { background: var(--purple-bg); color: var(--purple); }
+
+/* === SUB-METHOD CARDS =============================================== */
+.sub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.sub-card {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0.85rem;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.sub-card:hover { border-color: var(--border2); }
+.sub-card.selected { border-color: var(--green); background: var(--green-bg); }
+.sub-card h5 { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+.sub-card p  { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+
+/* === CONTROLS ======================================================= */
+.ctrl-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.9rem; }
+.ctrl-label { font-size: 13px; color: var(--muted); width: 200px; flex-shrink: 0; }
+input[type="range"] { flex: 1; accent-color: var(--green); height: 4px; }
+.ctrl-val { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--green); width: 55px; text-align: right; }
+input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--green); cursor: pointer; }
+input[type="text"] {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  flex: 1;
+  outline: none;
+}
+input[type="text"]:focus { border-color: var(--purple); }
+.small-note { font-size: 11.5px; color: var(--muted); margin-left: 8px; line-height: 1.5; }
+
+/* === TABLE ========================================================== */
+.table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  max-height: 400px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-family: 'DM Mono', monospace; }
+thead th {
+  background: var(--surface2);
+  padding: 9px 13px;
+  text-align: left;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  white-space: nowrap;
+}
+thead th .col-hdr { display: flex; align-items: center; gap: 5px; }
+thead th .col-cb  { width: 13px; height: 13px; accent-color: var(--green); cursor: pointer; }
+thead th.sel-col  { color: var(--green); background: var(--green-bg); }
+tbody td { padding: 7px 13px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--surface2); }
+td.is-num        { color: var(--blue); }
+td.is-sel        { color: var(--green); background: var(--green-bg) !important; }
+td.is-mod-lite   { color: var(--blue); }
+td.is-mod-strong { color: var(--amber); }
+td.is-mod-vault  { color: var(--purple); }
+.ttag { font-size: 9.5px; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.03em; }
+.ttag-numeric { background: var(--blue-bg);             color: var(--blue); }
+.ttag-text    { background: var(--green-bg);            color: var(--green); }
+.ttag-mixed   { background: rgba(119, 119, 138, 0.15);  color: var(--muted); }
+
+/* === STATS BAR ====================================================== */
+.stats-bar {
+  display: flex;
+  gap: 1.5rem;
+  padding: 0.9rem 1.25rem;
+  background: var(--surface2);
+  border-radius: 9px;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+.stat { display: flex; flex-direction: column; }
+.stat-v { font-family: 'DM Mono', monospace; font-size: 1.2rem; color: var(--green); font-weight: 500; }
+.stat-l { font-size: 10.5px; color: var(--muted); letter-spacing: 0.04em; }
+
+/* === SHEET TABS ===================================================== */
+.sheet-tabs { display: flex; gap: 4px; margin-bottom: 0.85rem; flex-wrap: wrap; }
+.stab {
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  font-family: 'DM Mono', monospace;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--tx-std);
+}
+.stab.active { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+
+/* === BUTTONS ======================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0.6rem 1.3rem;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s;
+  border: none;
+}
+.btn-primary { background: var(--green); color: #000; }
+.btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+.btn-outline { background: transparent; border: 1px solid var(--border2); color: var(--text); }
+.btn-outline:hover { border-color: var(--green); color: var(--green); }
+.btn-outline:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-ghost { background: transparent; border: 1px solid rgba(240, 112, 112, 0.3); color: var(--red); }
+.btn-ghost:hover { background: var(--red-bg); }
+.btn-row { display: flex; gap: 0.65rem; flex-wrap: wrap; margin-top: 1.5rem; }
+
+/* === NOTICE / ALERT BANNERS ========================================= */
+.notice {
+  display: flex;
+  gap: 9px;
+  padding: 0.85rem 1.1rem;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 1.25rem;
+  align-items: flex-start;
+  line-height: 1.55;
+}
+.n-info    { background: var(--blue-bg);   border: 1px solid rgba(96,  200, 240, 0.2);  color: var(--blue); }
+.n-success { background: var(--green-bg);  border: 1px solid rgba(110, 231, 160, 0.2);  color: var(--green); }
+.n-warn    { background: var(--amber-bg);  border: 1px solid rgba(245, 167,  66, 0.2);  color: var(--amber); }
+.n-purple  { background: var(--purple-bg); border: 1px solid rgba(180, 140, 245, 0.25); color: var(--purple); }
+
+/* === DOWNLOAD GRID ================================================== */
+.dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.9rem; margin-bottom: 1.5rem; }
+.dl-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--tx-std);
+}
+.dl-card:hover { border-color: var(--blue); background: var(--blue-bg); }
+.dl-icon  { font-size: 1.6rem; margin-bottom: 0.4rem; display: block; }
+.dl-label { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--blue); letter-spacing: 0.04em; }
+.dl-desc  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+.divider { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+
+/* === TOAST NOTIFICATIONS ============================================ */
+#toastContainer {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+.toast {
+  font-family: 'DM Mono', monospace;
+  font-size: 12.5px;
+  padding: 0.65rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity var(--tx-fast), transform var(--tx-fast);
+  max-width: 360px;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+}
+.toast.visible { opacity: 1; transform: translateY(0); }
+.toast-success { background: var(--green-bg);  border-color: rgba(110, 231, 160, 0.25); color: var(--green); }
+.toast-error   { background: var(--red-bg);    border-color: rgba(240, 112, 112, 0.25); color: var(--red); }
+.toast-warn    { background: var(--amber-bg);  border-color: rgba(245, 167,  66, 0.25); color: var(--amber); }
+.toast-info    { background: var(--blue-bg);   border-color: rgba(96,  200, 240, 0.25); color: var(--blue); }
+
+/* === FILENAME MODAL ================================================= */
+#filenameModal {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 12, 15, 0.85);
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+#filenameModal.hidden { display: none; }
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  width: min(420px, 92vw);
+}
+.modal-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; margin-bottom: 0.3rem; }
+.modal-sub   { font-size: 12px; color: var(--muted); margin-bottom: 1.1rem; }
+.modal-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 1.1rem;
+}
+.modal-input:focus { border-color: var(--green); }
+.modal-actions { display: flex; gap: 0.65rem; justify-content: flex-end; }
+
+/* === PROGRESS BAR (VAULT MODE) ====================================== */
+#vaultProgress { margin-bottom: 1.25rem; display: none; }
+#vaultProgress.visible { display: block; }
+.progress-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+}
+.progress-track { height: 3px; background: var(--surface3); border-radius: 99px; overflow: hidden; }
+.progress-fill  { height: 100%; background: var(--purple); border-radius: 99px; width: 0%; transition: width 0.1s linear; }
+
+/* === MAPPING EXPORT ================================================= */
+.mapping-section { margin-top: 0; }
+.mapping-section .panel-title { font-size: 0.875rem; margin-bottom: 0.45rem; }
+.mapping-section .panel-sub   { margin-bottom: 0.9rem; }
+
+/* === RESPONSIVE ===================================================== */
+@media (max-width: 768px) {
+  main   { padding: 1.25rem 1rem 3rem; }
+  header { padding: 1rem 1.25rem; }
+  .steps { overflow-x: auto; flex-wrap: nowrap; }
+  .step  { min-width: 90px; }
+  .mode-grid { grid-template-columns: 1fr; }
+  .dl-grid   { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .btn-row .btn { width: 100%; justify-content: center; }
+}
+
+.hidden { display: none !important; }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>DataMask</div>
+  <span class="hbadge">100% LOCAL — NO DATA SENT</span>
+</header>
+
+<main>
+  <div class="steps">
+    <div class="step active" id="s1"><div class="step-num">1</div>Upload</div>
+    <div class="step"        id="s2"><div class="step-num">2</div>Select Columns</div>
+    <div class="step"        id="s3"><div class="step-num">3</div>Protection Mode</div>
+    <div class="step"        id="s4"><div class="step-num">4</div>Download</div>
+  </div>
+
+  <div class="notice n-info">
+    <span>ℹ</span>
+    <span>Everything runs in your browser. Your data never leaves your device — no servers, no uploads, no logs.</span>
+  </div>
+
+  <!-- ── STEP 1: UPLOAD ──────────────────────────────────────────────── -->
+  <div class="panel visible" id="panel1">
+    <div class="panel-title">Upload your dataset</div>
+    <div class="panel-sub">Supports .xlsx, .xls, .csv, and .txt files.</div>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.txt"/>
+      <span class="upload-icon">📂</span>
+      <p><strong>Click to browse</strong> or drag &amp; drop</p>
+      <p style="margin-top:5px;font-size:12px">.xlsx · .xls · .csv · .txt</p>
+    </div>
+    <div class="paste-divider">
+      <hr/><span>OR</span><hr/>
+    </div>
+    <button class="btn btn-outline" id="pasteClipboard" style="width:100%;justify-content:center">
+      ⎘&nbsp;&nbsp;Paste CSV / TSV from clipboard
+    </button>
+  </div>
+
+  <!-- ── STEP 2: SELECT COLUMNS ──────────────────────────────────────── -->
+  <div class="panel" id="panel2">
+    <div class="panel-title">Select columns to anonymize</div>
+    <div class="panel-sub">Numeric columns get statistical masking. Text columns get consistent label substitution (SAMPLE_001, SAMPLE_002, …).</div>
+    <div class="sheet-tabs" id="sheetTabs"></div>
+    <div class="stats-bar hidden" id="statsBar">
+      <div class="stat"><span class="stat-v" id="stRows">—</span><span class="stat-l">ROWS</span></div>
+      <div class="stat"><span class="stat-v" id="stCols">—</span><span class="stat-l">COLUMNS</span></div>
+      <div class="stat"><span class="stat-v" id="stNum">—</span><span class="stat-l">NUMERIC</span></div>
+      <div class="stat"><span class="stat-v" id="stSel">0</span><span class="stat-l">SELECTED</span></div>
+    </div>
+    <div class="table-wrap">
+      <table id="previewTable"><thead></thead><tbody></tbody></table>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-outline" id="selAllNum">Select all numeric</button>
+      <button class="btn btn-outline" id="selAll">Select all</button>
+      <button class="btn btn-ghost"   id="clearSel">Clear</button>
+      <button class="btn btn-primary" id="toStep3" disabled>Choose protection →</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: PROTECTION MODE ─────────────────────────────────────── -->
+  <div class="panel" id="panel3">
+    <div class="panel-title">Choose your protection mode</div>
+    <div class="panel-sub">Three tiers — from simple obfuscation to cryptographically irreversible anonymization.</div>
+
+    <div class="mode-grid">
+      <div class="mode-card mode-lite selected" data-mode="lite">
+        <span class="mode-icon">🔵</span>
+        <div class="mode-name">Lite</div>
+        <div class="mode-desc">Adds noise, shuffles, or scales values. Structure and scale are loosely preserved. Fast and suitable for internal testing.</div>
+        <span class="mode-pill">reversible with effort</span>
+      </div>
+      <div class="mode-card mode-strong" data-mode="strong">
+        <span class="mode-icon">🟡</span>
+        <div class="mode-name">Strong</div>
+        <div class="mode-desc">Normalizes to [0,1], applies non-linear sigmoid distortion with random parameters, then cross-mixes columns. Parameters are never stored.</div>
+        <span class="mode-pill">practically irreversible</span>
+      </div>
+      <div class="mode-card mode-vault" data-mode="vault">
+        <span class="mode-icon">🟣</span>
+        <div class="mode-name">Vault</div>
+        <div class="mode-desc">Uses SHA-256 cryptographic hashing to seed a PRNG per cell. Generates statistically plausible synthetic values with zero mathematical link to originals.</div>
+        <span class="mode-pill">cryptographically irreversible</span>
+      </div>
+    </div>
+
+    <!-- LITE OPTIONS -->
+    <div id="liteOpts">
+      <div class="sub-grid">
+        <div class="sub-card selected" data-lm="noise"><h5>Random Noise</h5><p>Adds a ±% random delta to each value.</p></div>
+        <div class="sub-card" data-lm="shuffle"><h5>Shuffle</h5><p>Randomly reorders values within the column.</p></div>
+        <div class="sub-card" data-lm="replace"><h5>Random Replace</h5><p>New random value within column min/max.</p></div>
+        <div class="sub-card" data-lm="scale"><h5>Scale &amp; Shift</h5><p>Multiply by random factor + random offset.</p></div>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Noise / shift intensity</span>
+        <input type="range" id="liteNoise" min="5" max="80" value="25"/>
+        <span class="ctrl-val" id="liteNoiseVal">±25%</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Decimal places</span>
+        <input type="range" id="liteDec" min="0" max="4" value="2"/>
+        <span class="ctrl-val" id="liteDecVal">2</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Preserve sign (+/−)</span>
+        <input type="checkbox" id="liteSign" checked/>
+      </div>
+    </div>
+
+    <!-- STRONG OPTIONS -->
+    <div id="strongOpts" class="hidden">
+      <div class="notice n-warn">
+        <span>⚡</span>
+        <span><b>Strong mode</b> normalizes each column to [0,1], applies a random sigmoid distortion curve, then blends selected columns together. The random parameters are generated fresh each run and never stored — making reversal computationally infeasible even with the output in hand.</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Distortion strength</span>
+        <input type="range" id="strongDist" min="1" max="10" value="5"/>
+        <span class="ctrl-val" id="strongDistVal">5</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Cross-column mixing</span>
+        <input type="range" id="strongMix" min="0" max="50" value="15"/>
+        <span class="ctrl-val" id="strongMixVal">15%</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Output scale (fake range)</span>
+        <input type="range" id="strongScale" min="10" max="10000" step="10" value="1000"/>
+        <span class="ctrl-val" id="strongScaleVal">1000</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Decimal places</span>
+        <input type="range" id="strongDec" min="0" max="4" value="3"/>
+        <span class="ctrl-val" id="strongDecVal">3</span>
+      </div>
+    </div>
+
+    <!-- VAULT OPTIONS -->
+    <div id="vaultOpts" class="hidden">
+      <div class="notice n-warn hidden" id="httpWarning">
+        <span>⚠</span>
+        <span><b>HTTP detected.</b> Vault mode requires <code>crypto.subtle</code>, which is only available on HTTPS or localhost. Switch to HTTPS or choose Lite / Strong instead.</span>
+      </div>
+      <div class="notice n-purple">
+        <span>🔒</span>
+        <span><b>Vault mode</b> is cryptographically irreversible. Each cell is assigned a unique SHA-256 derived seed based on its position + your optional phrase, then a PRNG generates a completely synthetic value. Even knowing every output value and the full algorithm, the originals cannot be recovered — there is no key that maps back.</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Entropy phrase (optional)</span>
+        <input type="text" id="vaultSeed" placeholder="leave blank for fully random"/>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Preserve column shape</span>
+        <input type="checkbox" id="vaultShape" checked/>
+        <span class="small-note">Synthetic values follow the same mean/std envelope — no link to originals</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Decimal places</span>
+        <input type="range" id="vaultDec" min="0" max="4" value="2"/>
+        <span class="ctrl-val" id="vaultDecVal">2</span>
+      </div>
+      <div id="vaultProgress">
+        <div class="progress-label"><span>PROCESSING</span><span id="vaultProgressPct">0%</span></div>
+        <div class="progress-track"><div class="progress-fill" id="vaultProgressFill"></div></div>
+      </div>
+    </div>
+
+    <hr class="divider"/>
+    <div class="btn-row">
+      <button class="btn btn-outline" id="backTo2">← Back</button>
+      <button class="btn btn-primary" id="runMask">Apply anonymization →</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: DOWNLOAD ────────────────────────────────────────────── -->
+  <div class="panel" id="panel4">
+    <div class="panel-title">Anonymization complete</div>
+    <div class="panel-sub">Review the masked data below and download in your preferred format.</div>
+    <div class="notice n-success">
+      <span>✓</span><span id="doneMsg">Done.</span>
+    </div>
+    <div id="modeUsed" style="margin-bottom:1rem"></div>
+
+    <div class="table-wrap" style="margin-bottom:1.25rem">
+      <table id="resultTable"><thead></thead><tbody></tbody></table>
+    </div>
+
+    <div style="margin-bottom:1rem">
+      <button class="btn btn-outline" id="copyOutput">⎘&nbsp;&nbsp;Copy output as CSV</button>
+    </div>
+
+    <div class="panel-title" style="font-size:.875rem;margin-bottom:.75rem">Download as</div>
+    <div class="dl-grid">
+      <div class="dl-card" id="dlXlsx"><span class="dl-icon">📊</span><div class="dl-label">.XLSX</div><div class="dl-desc">Excel workbook</div></div>
+      <div class="dl-card" id="dlCsv"> <span class="dl-icon">📄</span><div class="dl-label">.CSV</div> <div class="dl-desc">Comma-separated</div></div>
+      <div class="dl-card" id="dlTsv"> <span class="dl-icon">📝</span><div class="dl-label">.TSV</div> <div class="dl-desc">Tab-separated</div></div>
+      <div class="dl-card" id="dlTxt"> <span class="dl-icon">🗒️</span><div class="dl-label">.TXT</div> <div class="dl-desc">Plain text</div></div>
+      <div class="dl-card" id="dlJson"><span class="dl-icon">📋</span><div class="dl-label">.JSON</div><div class="dl-desc">Array of objects</div></div>
+    </div>
+
+    <!-- Mapping export — only shown when text columns were anonymized -->
+    <div class="mapping-section hidden" id="mappingSection">
+      <hr class="divider"/>
+      <div class="panel-title" style="font-size:.875rem;margin-bottom:.35rem">Export anonymization mapping</div>
+      <p class="panel-sub">Shows which original text values were replaced with which labels. Useful for traceability.</p>
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn btn-outline" id="dlMappingCsv">↓ Mapping as CSV</button>
+        <button class="btn btn-outline" id="dlMappingJson">↓ Mapping as JSON</button>
+      </div>
+    </div>
+
+    <hr class="divider"/>
+    <div class="btn-row">
+      <button class="btn btn-outline" id="backTo3">← Adjust settings</button>
+      <button class="btn btn-outline" id="reAnonymize">↻ Re-anonymize</button>
+      <button class="btn btn-outline" id="startOver">↺ Start over</button>
+    </div>
+  </div>
+</main>
+
+<!-- ── TOAST CONTAINER ─────────────────────────────────────────────── -->
+<div id="toastContainer"></div>
+
+<!-- ── FILENAME MODAL ──────────────────────────────────────────────── -->
+<div id="filenameModal" class="hidden">
+  <div class="modal-box">
+    <div class="modal-title">Name your file</div>
+    <div class="modal-sub">Choose a filename for the download. No extension needed.</div>
+    <input type="text" class="modal-input" id="filenameInput" autocomplete="off" spellcheck="false"/>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="modalCancel">Cancel</button>
+      <button class="btn btn-primary" id="modalConfirm">Download</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════════════════
+// STATE & UTILITIES
+// ══════════════════════════════════════════════════════════════════════
+
+const state = {
+  workbook:       null,
+  activeSheet:    null,
+  rawData:        [],
+  headers:        [],
+  colTypes:       [],
+  selectedCols:   new Set(),
+  maskedData:     [],
+  fileName:       'data',
+  selMode:        'lite',
+  liteMethod:     'noise',
+  textLabelMap:   {},       // { colIndex: { originalValue: 'SAMPLE_001', ... } }
+  lastObjectURLs: [],       // tracked object URLs for revocation on reset
+};
+
+const $     = id     => document.getElementById(id);
+const isNum = v      => v !== null && v !== undefined && v !== '' && !isNaN(Number(v));
+const rnd   = (a, b) => Math.random() * (b - a) + a;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/**
+ * Parse a plain-text string into an array-of-arrays.
+ * Auto-detects delimiter (tab preferred, then comma).
+ * Handles \r\n and \r line endings.
+ */
+function parseDelimitedText(text) {
+  const normalized = text.trim().replace(/\r\n?/g, '\n');
+  const firstLine  = normalized.split('\n')[0];
+  const sep        = firstLine.includes('\t') ? '\t' : ',';
+  return normalized.split('\n').map(line =>
+    line.split(sep).map(v => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'))
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * Show a slide-in toast notification.
+ * @param {string} message
+ * @param {'success'|'error'|'warn'|'info'} type
+ * @param {number} duration  milliseconds
+ */
+function notify(message, type = 'info', duration = 3500) {
+  const icons  = { success: '✓', error: '✕', warn: '⚠', info: 'ℹ' };
+  const toast  = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `<span>${icons[type] ?? 'ℹ'}</span><span>${message}</span>`;
+  $('toastContainer').appendChild(toast);
+  requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('visible')));
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+  }, duration);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// STEP NAVIGATION
+// ══════════════════════════════════════════════════════════════════════
+
+function goStep(n) {
+  [1, 2, 3, 4].forEach(i => {
+    $('panel' + i).classList.toggle('visible', i === n);
+    const el = $('s' + i);
+    el.className = 'step' + (i === n ? ' active' : i < n ? ' done' : '');
+    el.querySelector('.step-num').textContent = i < n ? '✓' : i;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// FILE HANDLING
+// ══════════════════════════════════════════════════════════════════════
+
+const uploadZone = $('uploadZone');
+const fileInput  = $('fileInput');
+
+uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', ()=> uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+function handleFile(file) {
+  state.fileName = file.name.replace(/\.[^.]+$/, '');
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  if (ext === 'txt') {
+    // Plain text (likely TSV) — read as text, parse manually
+    const reader = new FileReader();
+    reader.onload = e => {
+      const parsed = parseDelimitedText(e.target.result);
+      if (parsed.length < 2) { notify('File appears empty or has only one row.', 'warn'); return; }
+      injectParsedData(parsed, state.fileName);
+    };
+    reader.readAsText(file);
+  } else if (ext === 'csv') {
+    // CSV — route through SheetJS for proper quote/comma handling
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        // Strip BOM if present
+        const text = e.target.result.replace(/^﻿/, '');
+        state.workbook = XLSX.read(text, { type: 'string' });
+        buildTabs();
+        loadSheet(state.workbook.SheetNames[0]);
+        goStep(2);
+      } catch (err) {
+        console.error(err);
+        notify('Could not parse the CSV file.', 'error');
+      }
+    };
+    reader.readAsText(file);
+  } else {
+    // XLSX / XLS — SheetJS with ArrayBuffer
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        state.workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+        buildTabs();
+        loadSheet(state.workbook.SheetNames[0]);
+        goStep(2);
+      } catch (err) {
+        console.error(err);
+        notify('Could not parse the file. Make sure it is a valid .xlsx or .xls file.', 'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+/**
+ * Inject a parsed array-of-arrays as a single-sheet dataset (no workbook needed).
+ * Used by .txt upload and clipboard paste.
+ */
+function injectParsedData(parsed, sheetName) {
+  state.workbook    = null;
+  state.activeSheet = sheetName || 'Data';
+  state.rawData     = parsed;
+  state.headers     = parsed[0];
+  const rows        = parsed.slice(1);
+  state.colTypes    = state.headers.map((_, ci) => detectType(ci, rows));
+  state.selectedCols.clear();
+
+  const tabsEl = $('sheetTabs');
+  tabsEl.innerHTML = '';
+  const btn = document.createElement('button');
+  btn.className   = 'stab active';
+  btn.textContent = state.activeSheet;
+  tabsEl.appendChild(btn);
+
+  renderPreview(rows);
+  updateStats(rows);
+  goStep(2);
+}
+
+function buildTabs() {
+  const t = $('sheetTabs');
+  t.innerHTML = '';
+  state.workbook.SheetNames.forEach(name => {
+    const btn = document.createElement('button');
+    btn.className   = 'stab';
+    btn.textContent = name;
+    btn.addEventListener('click', () => loadSheet(name));
+    t.appendChild(btn);
+  });
+}
+
+function loadSheet(name) {
+  state.activeSheet = name;
+  document.querySelectorAll('.stab').forEach(t => t.classList.toggle('active', t.textContent === name));
+  state.rawData  = XLSX.utils.sheet_to_json(state.workbook.Sheets[name], { header: 1, defval: '' });
+  if (!state.rawData.length) return;
+  state.headers  = state.rawData[0];
+  const rows     = state.rawData.slice(1);
+  state.colTypes = state.headers.map((_, ci) => detectType(ci, rows));
+  state.selectedCols.clear();
+  renderPreview(rows);
+  updateStats(rows);
+}
+
+function detectType(ci, rows) {
+  let num = 0, tot = 0;
+  for (let r = 0; r < Math.min(rows.length, 200); r++) {
+    const v = rows[r][ci];
+    if (v === null || v === undefined || v === '') continue;
+    tot++;
+    if (isNum(v)) num++;
+  }
+  if (!tot) return 'mixed';
+  return num / tot > 0.85 ? 'numeric' : num / tot > 0.3 ? 'mixed' : 'text';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// CLIPBOARD PASTE
+// ══════════════════════════════════════════════════════════════════════
+
+$('pasteClipboard').addEventListener('click', async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) { notify('Clipboard is empty or contains no text.', 'warn'); return; }
+    const parsed = parseDelimitedText(text);
+    if (parsed.length < 2) { notify('Clipboard data needs at least a header row and one data row.', 'warn'); return; }
+    injectParsedData(parsed, 'clipboard_data');
+    notify(`Clipboard data loaded — ${(parsed.length - 1).toLocaleString()} rows detected.`, 'success');
+  } catch {
+    notify('Could not read clipboard. Grant permission and try again.', 'error');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// TABLE RENDERING
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * Unified table renderer for both preview (step 2) and result (step 4).
+ * @param {Array<Array>} rows
+ * @param {string}       tableId
+ * @param {{selectable?: boolean, highlightMode?: string|null, maxRows?: number}} opts
+ */
+function renderTable(rows, tableId, opts = {}) {
+  const { selectable = false, highlightMode = null, maxRows = 100 } = opts;
+  const table = document.getElementById(tableId);
+  const thead = table.querySelector('thead');
+  const tbody = table.querySelector('tbody');
+  thead.innerHTML = '';
+  tbody.innerHTML = '';
+
+  // Header row
+  const hr = document.createElement('tr');
+  state.headers.forEach((h, ci) => {
+    const th = document.createElement('th');
+    if (selectable) {
+      th.innerHTML = `<div class="col-hdr">
+        <input type="checkbox" class="col-cb" data-col="${ci}" ${state.selectedCols.has(ci) ? 'checked' : ''}/>
+        <span>${h || 'col_' + (ci + 1)}</span>
+        <span class="ttag ttag-${state.colTypes[ci]}">${state.colTypes[ci].slice(0, 3)}</span>
+      </div>`;
+      if (state.selectedCols.has(ci)) th.classList.add('sel-col');
+    } else {
+      th.textContent = h || 'col_' + (ci + 1);
+      if (highlightMode && state.selectedCols.has(ci)) {
+        const colors = { lite: 'var(--blue)', strong: 'var(--amber)', vault: 'var(--purple)' };
+        th.style.color = colors[highlightMode] ?? '';
+      }
+    }
+    hr.appendChild(th);
+  });
+  thead.appendChild(hr);
+
+  // Wire checkbox selection listeners
+  if (selectable) {
+    thead.querySelectorAll('.col-cb').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const ci = parseInt(cb.dataset.col);
+        if (cb.checked) state.selectedCols.add(ci); else state.selectedCols.delete(ci);
+        refreshHL();
+        updateStats(rows);
+      });
+    });
+  }
+
+  // Body rows (capped at maxRows for performance)
+  rows.slice(0, maxRows).forEach(row => {
+    const tr = document.createElement('tr');
+    state.headers.forEach((_, ci) => {
+      const td = document.createElement('td');
+      td.textContent = row[ci] ?? '';
+      if (selectable) {
+        if (state.colTypes[ci] === 'numeric') td.classList.add('is-num');
+        if (state.selectedCols.has(ci))       td.classList.add('is-sel');
+      } else if (highlightMode && state.selectedCols.has(ci)) {
+        const cls = { lite: 'is-mod-lite', strong: 'is-mod-strong', vault: 'is-mod-vault' };
+        if (cls[highlightMode]) td.classList.add(cls[highlightMode]);
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function renderPreview(rows) {
+  renderTable(rows, 'previewTable', { selectable: true });
+  $('statsBar').classList.remove('hidden');
+}
+
+function renderResult() {
+  renderTable(state.maskedData, 'resultTable', { highlightMode: state.selMode });
+}
+
+function refreshHL() {
+  const table = document.getElementById('previewTable');
+  table.querySelectorAll('th').forEach((th, ci) => {
+    th.classList.toggle('sel-col', state.selectedCols.has(ci));
+    const cb = th.querySelector('.col-cb');
+    if (cb) cb.checked = state.selectedCols.has(ci);
+  });
+  table.querySelectorAll('tbody tr').forEach(tr => {
+    tr.querySelectorAll('td').forEach((td, ci) => td.classList.toggle('is-sel', state.selectedCols.has(ci)));
+  });
+  $('toStep3').disabled    = state.selectedCols.size === 0;
+  $('stSel').textContent   = state.selectedCols.size;
+}
+
+function updateStats(rows) {
+  $('stRows').textContent = rows.length.toLocaleString();
+  $('stCols').textContent = state.headers.length;
+  $('stNum').textContent  = state.colTypes.filter(t => t === 'numeric').length;
+  $('stSel').textContent  = state.selectedCols.size;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// COLUMN SELECTION BUTTONS
+// ══════════════════════════════════════════════════════════════════════
+
+$('selAllNum').addEventListener('click', () => {
+  state.selectedCols.clear();
+  state.colTypes.forEach((t, i) => { if (t === 'numeric') state.selectedCols.add(i); });
+  refreshHL();
+});
+$('selAll').addEventListener('click', () => {
+  state.selectedCols.clear();
+  state.headers.forEach((_, i) => state.selectedCols.add(i));
+  refreshHL();
+});
+$('clearSel').addEventListener('click', () => { state.selectedCols.clear(); refreshHL(); });
+
+$('toStep3').addEventListener('click', () => {
+  const hasNumeric = [...state.selectedCols].some(ci => state.colTypes[ci] === 'numeric');
+  if (!hasNumeric && state.selectedCols.size > 0) {
+    notify('No numeric columns selected — only text label substitution will be applied.', 'warn', 5000);
+  }
+  goStep(3);
+});
+
+$('backTo2').addEventListener('click', () => goStep(2));
+$('backTo3').addEventListener('click', () => goStep(3));
+
+// ══════════════════════════════════════════════════════════════════════
+// MODE SWITCHING
+// ══════════════════════════════════════════════════════════════════════
+
+document.querySelectorAll('.mode-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.mode-card').forEach(x => x.classList.remove('selected'));
+    card.classList.add('selected');
+    state.selMode = card.dataset.mode;
+
+    $('liteOpts').classList.toggle('hidden',   state.selMode !== 'lite');
+    $('strongOpts').classList.toggle('hidden', state.selMode !== 'strong');
+    $('vaultOpts').classList.toggle('hidden',  state.selMode !== 'vault');
+
+    const insecure = state.selMode === 'vault' &&
+                     location.protocol !== 'https:' &&
+                     location.hostname  !== 'localhost';
+    $('httpWarning').classList.toggle('hidden', !insecure);
+    if (insecure) notify('Vault mode requires HTTPS. This page is on HTTP — Vault mode may fail.', 'warn', 7000);
+  });
+});
+
+document.querySelectorAll('[data-lm]').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('[data-lm]').forEach(x => x.classList.remove('selected'));
+    card.classList.add('selected');
+    state.liteMethod = card.dataset.lm;
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// RANGE CONTROL DISPLAYS
+// ══════════════════════════════════════════════════════════════════════
+
+$('liteNoise').addEventListener('input',   () => $('liteNoiseVal').textContent   = `±${$('liteNoise').value}%`);
+$('liteDec').addEventListener('input',     () => $('liteDecVal').textContent     = $('liteDec').value);
+$('strongDist').addEventListener('input',  () => $('strongDistVal').textContent  = $('strongDist').value);
+$('strongMix').addEventListener('input',   () => $('strongMixVal').textContent   = `${$('strongMix').value}%`);
+$('strongScale').addEventListener('input', () => $('strongScaleVal').textContent = parseInt($('strongScale').value).toLocaleString());
+$('strongDec').addEventListener('input',   () => $('strongDecVal').textContent   = $('strongDec').value);
+$('vaultDec').addEventListener('input',    () => $('vaultDecVal').textContent    = $('vaultDec').value);
+
+// ══════════════════════════════════════════════════════════════════════
+// TEXT LABEL MAPPING
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * Build a deterministic original-value → SAMPLE_NNN map for every selected text column.
+ * Populates state.textLabelMap.
+ * @param {Array<Array>} rows
+ */
+function buildTextLabelMap(rows) {
+  state.textLabelMap = {};
+  state.selectedCols.forEach(ci => {
+    if (state.colTypes[ci] !== 'text') return;
+    const map = {};
+    let counter = 1;
+    rows.forEach(row => {
+      const v = row[ci];
+      if (v === null || v === undefined || v === '') return;
+      const key = String(v);
+      if (!(key in map)) {
+        map[key] = 'SAMPLE_' + String(counter).padStart(3, '0');
+        counter++;
+      }
+    });
+    state.textLabelMap[ci] = map;
+  });
+}
+
+/**
+ * Apply text label substitution to a copied row array.
+ * @param {Array} nr   - new (output) row to modify in-place
+ * @param {Array} row  - original row (used for key lookup)
+ */
+function applyTextLabels(nr, row) {
+  state.selectedCols.forEach(ci => {
+    if (state.colTypes[ci] !== 'text') return;
+    const map = state.textLabelMap[ci];
+    if (!map) return;
+    const v = row[ci];
+    if (v !== null && v !== undefined && v !== '') {
+      nr[ci] = map[String(v)] ?? v;
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// MASKING ENGINES
+// ══════════════════════════════════════════════════════════════════════
+
+// ── LITE ─────────────────────────────────────────────────────────────
+function applyLite(rows) {
+  const pct      = parseInt($('liteNoise').value) / 100;
+  const dec      = parseInt($('liteDec').value);
+  const keepSign = $('liteSign').checked;
+
+  const cs = {};
+  state.selectedCols.forEach(ci => {
+    if (state.colTypes[ci] !== 'numeric') return;
+    const vals = rows.map(r => Number(r[ci])).filter(n => !isNaN(n));
+    cs[ci] = {
+      min:  Math.min(...vals),
+      max:  Math.max(...vals),
+      range: Math.max(...vals) - Math.min(...vals),
+      shuf: state.liteMethod === 'shuffle' ? [...vals].sort(() => Math.random() - 0.5) : null,
+      idx:  0,
+    };
+  });
+
+  return rows.map(row => {
+    const nr = [...row];
+    state.selectedCols.forEach(ci => {
+      if (state.colTypes[ci] !== 'numeric') return;
+      const v = row[ci];
+      if (!isNum(v)) return;
+      const n  = Number(v);
+      const st = cs[ci] ?? { min: 0, max: 100, range: 100 };
+      let res;
+      if      (state.liteMethod === 'noise')   res = n + n * pct * (Math.random() * 2 - 1);
+      else if (state.liteMethod === 'shuffle') res = st.shuf[st.idx++ % st.shuf.length];
+      else if (state.liteMethod === 'replace') res = rnd(st.min, st.max);
+      else { const f = 1 + (Math.random() * 2 - 1) * pct; res = n * f + st.range * (Math.random() * 0.06 - 0.03); }
+      if (keepSign && n !== 0) res = Math.abs(res) * Math.sign(n);
+      nr[ci] = parseFloat(res.toFixed(dec));
+    });
+    applyTextLabels(nr, row);
+    return nr;
+  });
+}
+
+// ── STRONG ───────────────────────────────────────────────────────────
+// Normalize → sigmoid distortion → cross-column mixing → rescale
+// All random parameters generated per-column and discarded — never stored
+function applyStrong(rows) {
+  const distK    = parseInt($('strongDist').value);
+  const mixPct   = parseInt($('strongMix').value) / 100;
+  const outScale = parseInt($('strongScale').value);
+  const dec      = parseInt($('strongDec').value);
+
+  const cs = {};
+  state.selectedCols.forEach(ci => {
+    if (state.colTypes[ci] !== 'numeric') return;
+    const vals = rows.map(r => Number(r[ci])).filter(n => !isNaN(n));
+    const mn   = Math.min(...vals);
+    const rng  = (Math.max(...vals) - mn) || 1;
+    cs[ci] = {
+      mn, rng,
+      k:    distK * (0.8 + Math.random() * 3),
+      x0:   0.15  + Math.random() * 0.7,
+      flip: Math.random() > 0.5,
+      // Output range computed once per column — not per row
+      lo:   outScale * (0.08 + Math.random() * 0.04),
+      hi:   outScale * (0.78 + Math.random() * 0.18),
+    };
+  });
+
+  // Pass 1: normalize each selected cell to [0,1]
+  const norm = rows.map(row => {
+    const n = {};
+    state.selectedCols.forEach(ci => {
+      if (!isNum(row[ci]) || !cs[ci]) return;
+      n[ci] = clamp((Number(row[ci]) - cs[ci].mn) / cs[ci].rng, 0, 1);
+    });
+    return n;
+  });
+
+  const colList = [...state.selectedCols].filter(ci => cs[ci]);
+
+  // Pass 2: sigmoid distortion + cross-column mixing + rescale to fixed fake range
+  return rows.map((row, ri) => {
+    const nr = [...row];
+    colList.forEach((ci, idx) => {
+      if (!isNum(row[ci])) return;
+      const st = cs[ci];
+      let v = norm[ri][ci] ?? 0.5;
+
+      // Sigmoid: 1 / (1 + e^(-k*(v-x0)))
+      v = 1 / (1 + Math.exp(-st.k * (v - st.x0)));
+      if (st.flip) v = 1 - v;
+
+      // Per-cell jitter
+      v = clamp(v + (Math.random() - 0.5) * 0.04, 0, 1);
+
+      // Cross-column mixing
+      if (mixPct > 0 && colList.length > 1) {
+        const adj = norm[ri][colList[(idx + 1) % colList.length]] ?? 0.5;
+        v = v * (1 - mixPct) + adj * mixPct;
+      }
+      v = clamp(v, 0, 1);
+
+      nr[ci] = parseFloat((st.lo + v * (st.hi - st.lo)).toFixed(dec));
+    });
+    applyTextLabels(nr, row);
+    return nr;
+  });
+}
+
+// ── VAULT ────────────────────────────────────────────────────────────
+// SHA-256 per cell position → mulberry32 PRNG → fully synthetic value.
+// No mathematical relationship to originals. No key stored or retrievable.
+
+async function sha256seed(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return new Uint32Array(buf)[0];
+}
+
+function mulberry32(seed) {
+  let a = seed;
+  return () => {
+    a |= 0;
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// Box-Muller transform for a normal-distribution sample
+function normalSample(rng, mean, std) {
+  const u1 = Math.max(rng(), 1e-10), u2 = rng();
+  return mean + std * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+async function applyVault(rows, onProgress = null) {
+  const dec       = parseInt($('vaultDec').value);
+  const keepShape = $('vaultShape').checked;
+  const userSeed  = $('vaultSeed').value.trim() || 'rnd_' + Math.random().toString(36).slice(2);
+
+  const cs = {};
+  state.selectedCols.forEach(ci => {
+    if (state.colTypes[ci] !== 'numeric') return;
+    const vals = rows.map(r => Number(r[ci])).filter(n => !isNaN(n));
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const std  = Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length) || 1;
+    cs[ci] = { mean, std, min: Math.min(...vals), max: Math.max(...vals) };
+  });
+
+  const result = [];
+  for (let ri = 0; ri < rows.length; ri++) {
+    const nr = [...rows[ri]];
+    for (const ci of state.selectedCols) {
+      if (state.colTypes[ci] !== 'numeric') continue;
+      const st = cs[ci];
+      if (!st || !isNum(rows[ri][ci])) continue;
+      const seed = await sha256seed(`${userSeed}:${ci}:${ri}`);
+      const rng  = mulberry32(seed);
+      let syn;
+      if (keepShape) {
+        syn = normalSample(rng, st.mean, st.std);
+        syn = clamp(syn, st.min - st.std * 0.5, st.max + st.std * 0.5);
+      } else {
+        syn = st.min + rng() * (st.max - st.min);
+      }
+      nr[ci] = parseFloat(syn.toFixed(dec));
+    }
+    applyTextLabels(nr, rows[ri]);
+    result.push(nr);
+    if (onProgress) onProgress(ri + 1, rows.length);
+    // Yield to browser event loop every 50 rows to keep UI responsive
+    if (ri % 50 === 49) await new Promise(r => setTimeout(r, 0));
+  }
+  return result;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// RUN + PROGRESS
+// ══════════════════════════════════════════════════════════════════════
+
+$('runMask').addEventListener('click', async () => {
+  const btn  = $('runMask');
+  const rows = state.rawData.slice(1);
+  btn.disabled    = true;
+  btn.textContent = 'Processing…';
+
+  buildTextLabelMap(rows);
+  if (state.selMode === 'vault') $('vaultProgress').classList.add('visible');
+
+  try {
+    if (state.selMode === 'lite') {
+      state.maskedData = applyLite(rows);
+    } else if (state.selMode === 'strong') {
+      state.maskedData = applyStrong(rows);
+    } else {
+      state.maskedData = await applyVault(rows, (done, total) => {
+        const pct = Math.round((done / total) * 100);
+        $('vaultProgressFill').style.width = pct + '%';
+        $('vaultProgressPct').textContent  = pct + '%';
+      });
+    }
+
+    let changed = 0;
+    state.maskedData.forEach((row, ri) =>
+      state.selectedCols.forEach(ci => { if (row[ci] !== rows[ri][ci]) changed++; })
+    );
+
+    const modeLabel = { lite: '🔵 Lite mode', strong: '🟡 Strong mode', vault: '🟣 Vault mode' };
+    const modeCls   = { lite: 'n-info',       strong: 'n-warn',         vault: 'n-purple' };
+    $('modeUsed').innerHTML = `<div class="notice ${modeCls[state.selMode]}" style="display:inline-flex;margin-bottom:0">
+      <span>${modeLabel[state.selMode]} applied</span></div>`;
+    $('doneMsg').textContent = `${changed.toLocaleString()} values anonymized across ${state.selectedCols.size} column(s) — ${rows.length.toLocaleString()} rows processed.`;
+
+    $('mappingSection').classList.toggle('hidden', Object.keys(state.textLabelMap).length === 0);
+    renderResult();
+    goStep(4);
+  } catch (err) {
+    console.error(err);
+    notify('An error occurred during anonymization. See the browser console for details.', 'error', 6000);
+  } finally {
+    $('vaultProgress').classList.remove('visible');
+    $('vaultProgressFill').style.width = '0%';
+    $('vaultProgressPct').textContent  = '0%';
+    btn.disabled    = false;
+    btn.textContent = 'Apply anonymization →';
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════════════════════════════
+
+function dlBlob(content, name, mime) {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
+  state.lastObjectURLs.push(url);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+/**
+ * Export the anonymized dataset in the specified format.
+ * @param {'xlsx'|'csv'|'tsv'|'txt'|'json'} format
+ * @param {string} filename  without extension
+ */
+function exportAs(format, filename) {
+  const allRows = [state.headers, ...state.maskedData];
+
+  if (format === 'xlsx') {
+    const ws = XLSX.utils.aoa_to_sheet(allRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, state.activeSheet || 'Sheet1');
+    XLSX.writeFile(wb, filename + '.xlsx');
+    return;
+  }
+
+  if (format === 'json') {
+    const objects = state.maskedData.map(row => {
+      const obj = {};
+      state.headers.forEach((h, i) => { obj[h || 'col_' + (i + 1)] = row[i] ?? ''; });
+      return obj;
+    });
+    dlBlob(JSON.stringify(objects, null, 2), filename + '.json', 'application/json');
+    return;
+  }
+
+  // csv / tsv / txt — shared serializer
+  const sep  = format === 'csv' ? ',' : '\t';
+  const mime = format === 'csv' ? 'text/csv' : format === 'tsv' ? 'text/tab-separated-values' : 'text/plain';
+  const content = allRows.map(row =>
+    row.map(v => {
+      const s = String(v ?? '');
+      if (format === 'csv' && (s.includes(',') || s.includes('"') || s.includes('\n')))
+        return `"${s.replace(/"/g, '""')}"`;
+      return s.replace(/\t/g, ' ');
+    }).join(sep)
+  ).join('\n');
+  dlBlob(content, filename + '.' + format, mime);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// FILENAME MODAL
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * Prompt the user to choose a filename via the modal dialog.
+ * @param {string} defaultName
+ * @returns {Promise<string|null>}  null if cancelled
+ */
+function promptFilename(defaultName) {
+  return new Promise(resolve => {
+    const modal = $('filenameModal');
+    const input = $('filenameInput');
+    input.value = defaultName;
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => { input.focus(); input.select(); });
+
+    function confirm() {
+      const val = input.value.trim() || defaultName;
+      modal.classList.add('hidden');
+      cleanup();
+      resolve(val);
+    }
+    function cancel() {
+      modal.classList.add('hidden');
+      cleanup();
+      resolve(null);
+    }
+    function onKey(e) {
+      if (e.key === 'Enter')  confirm();
+      if (e.key === 'Escape') cancel();
+    }
+    function cleanup() {
+      $('modalConfirm').removeEventListener('click', confirm);
+      $('modalCancel').removeEventListener('click',  cancel);
+      input.removeEventListener('keydown', onKey);
+    }
+    $('modalConfirm').addEventListener('click', confirm);
+    $('modalCancel').addEventListener('click',  cancel);
+    input.addEventListener('keydown', onKey);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DOWNLOAD HANDLERS
+// ══════════════════════════════════════════════════════════════════════
+
+async function handleDownload(format) {
+  const name = await promptFilename(`${state.fileName}_${state.selMode}`);
+  if (!name) return;
+  exportAs(format, name);
+  notify(`Downloaded as ${name}.${format}`, 'success');
+}
+
+$('dlXlsx').addEventListener('click', () => handleDownload('xlsx'));
+$('dlCsv').addEventListener('click',  () => handleDownload('csv'));
+$('dlTsv').addEventListener('click',  () => handleDownload('tsv'));
+$('dlTxt').addEventListener('click',  () => handleDownload('txt'));
+$('dlJson').addEventListener('click', () => handleDownload('json'));
+
+// ══════════════════════════════════════════════════════════════════════
+// CLIPBOARD COPY (output)
+// ══════════════════════════════════════════════════════════════════════
+
+$('copyOutput').addEventListener('click', async () => {
+  const content = [state.headers, ...state.maskedData].map(row =>
+    row.map(v => {
+      const s = String(v ?? '');
+      return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(',')
+  ).join('\n');
+  try {
+    await navigator.clipboard.writeText(content);
+    notify('Anonymized data copied to clipboard.', 'success');
+  } catch {
+    notify('Clipboard write failed. Try downloading instead.', 'error');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// MAPPING EXPORT
+// ══════════════════════════════════════════════════════════════════════
+
+async function exportMapping(format) {
+  const map     = state.textLabelMap;
+  const colKeys = Object.keys(map);
+  if (!colKeys.length) { notify('No text label mapping was generated.', 'warn'); return; }
+
+  const name = await promptFilename(`${state.fileName}_${state.selMode}_mapping`);
+  if (!name) return;
+
+  if (format === 'json') {
+    const out = {};
+    colKeys.forEach(ci => {
+      const colName = state.headers[ci] || 'col_' + (parseInt(ci) + 1);
+      out[colName] = map[ci];
+    });
+    dlBlob(JSON.stringify(out, null, 2), name + '.json', 'application/json');
+  } else {
+    const rows = [['column_name', 'original_value', 'anonymized_label']];
+    colKeys.forEach(ci => {
+      const colName = state.headers[ci] || 'col_' + (parseInt(ci) + 1);
+      Object.entries(map[ci]).forEach(([orig, label]) => rows.push([colName, orig, label]));
+    });
+    const csv = rows.map(r =>
+      r.map(v => { const s = String(v); return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s; }).join(',')
+    ).join('\n');
+    dlBlob(csv, name + '.csv', 'text/csv');
+  }
+  notify(`Mapping exported as ${format.toUpperCase()}.`, 'success');
+}
+
+$('dlMappingCsv').addEventListener('click',  () => exportMapping('csv'));
+$('dlMappingJson').addEventListener('click', () => exportMapping('json'));
+
+// ══════════════════════════════════════════════════════════════════════
+// RE-ANONYMIZE
+// ══════════════════════════════════════════════════════════════════════
+
+$('reAnonymize').addEventListener('click', async () => {
+  if (!state.maskedData.length) return;
+  const btn  = $('reAnonymize');
+  const rows = state.maskedData;
+  btn.disabled = true;
+  buildTextLabelMap(rows);
+  if (state.selMode === 'vault') $('vaultProgress').classList.add('visible');
+  try {
+    if (state.selMode === 'lite')        state.maskedData = applyLite(rows);
+    else if (state.selMode === 'strong') state.maskedData = applyStrong(rows);
+    else state.maskedData = await applyVault(rows, (done, total) => {
+      const pct = Math.round((done / total) * 100);
+      $('vaultProgressFill').style.width = pct + '%';
+      $('vaultProgressPct').textContent  = pct + '%';
+    });
+    renderResult();
+    notify('Re-anonymization applied — output updated.', 'success');
+  } catch (err) {
+    console.error(err);
+    notify('Re-anonymization failed. See browser console for details.', 'error');
+  } finally {
+    $('vaultProgress').classList.remove('visible');
+    $('vaultProgressFill').style.width = '0%';
+    $('vaultProgressPct').textContent  = '0%';
+    btn.disabled = false;
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ══════════════════════════════════════════════════════════════════════
+
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea, select')) return;
+  const activePanel = [1, 2, 3, 4].find(i => $('panel' + i).classList.contains('visible'));
+
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    if (!$('filenameModal').classList.contains('hidden')) { $('modalCancel').click(); return; }
+    if (activePanel === 3) $('backTo2').click();
+    if (activePanel === 4) $('backTo3').click();
+  }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    if (activePanel === 2 && !$('toStep3').disabled) { e.preventDefault(); $('toStep3').click(); }
+    if (activePanel === 3 && !$('runMask').disabled) { e.preventDefault(); $('runMask').click(); }
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// START OVER
+// ══════════════════════════════════════════════════════════════════════
+
+$('startOver').addEventListener('click', () => {
+  state.lastObjectURLs.forEach(u => URL.revokeObjectURL(u));
+  state.workbook       = null;
+  state.activeSheet    = null;
+  state.rawData        = [];
+  state.headers        = [];
+  state.colTypes       = [];
+  state.maskedData     = [];
+  state.textLabelMap   = {};
+  state.lastObjectURLs = [];
+  state.selectedCols.clear();
+  fileInput.value = '';
+  $('sheetTabs').innerHTML = '';
+  $('statsBar').classList.add('hidden');
+  goStep(1);
+});
+
+</script>
+</body>
+</html>
