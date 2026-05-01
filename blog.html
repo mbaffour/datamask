@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Why I Built a Local-First Data Anonymizer for AI Workflows — DataMask</title>
+<meta name="description" content="On the quiet privacy risks of uploading research data to AI tools — and a practical solution that keeps your data entirely on your device."/>
+<meta property="og:title" content="Why I Built a Local-First Data Anonymizer for AI Workflows"/>
+<meta property="og:description" content="On the quiet privacy risks of uploading research data to AI tools — and a practical solution."/>
+<meta property="og:type" content="article"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+
+/* === RESET & TOKENS ================================================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0c0c0f;
+  --surface:  #141417;
+  --surface2: #1c1c21;
+  --surface3: #242429;
+  --border:   rgba(255,255,255,0.06);
+  --border2:  rgba(255,255,255,0.12);
+  --text:     #eeeef2;
+  --muted:    #77778a;
+  --subtle:   #55556a;
+  --green:    #6ee7a0;
+  --blue:     #60c8f0;
+  --amber:    #f5a742;
+  --purple:   #b48cf5;
+  --red:      #f07070;
+  --green-bg: rgba(110,231,160,0.08);
+  --blue-bg:  rgba(96,200,240,0.08);
+  --amber-bg: rgba(245,167,66,0.08);
+  --purple-bg:rgba(180,140,245,0.08);
+  --tx: 0.2s ease;
+}
+
+/* === BASE =========================================================== */
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: rgba(110,231,160,0.25); }
+
+/* === NAV ============================================================ */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
+  background: rgba(12,12,15,0.9);
+  backdrop-filter: blur(12px);
+  padding: 0 2rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  color: var(--text);
+}
+.logo-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2.5s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.nav-cta {
+  font-family: 'DM Mono', monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--green);
+  background: var(--green-bg);
+  border: 1px solid rgba(110,231,160,0.25);
+  padding: 6px 14px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all var(--tx);
+}
+.nav-cta:hover { background: rgba(110,231,160,0.15); border-color: rgba(110,231,160,0.4); }
+
+/* === HERO =========================================================== */
+.hero {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 5rem 2rem 3.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.hero-tags {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 4px;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+}
+.tag-featured { border-color: rgba(110,231,160,0.3); color: var(--green); background: var(--green-bg); }
+h1 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.85rem, 4vw, 2.75rem);
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+  margin-bottom: 1.1rem;
+}
+.hero-sub {
+  font-size: 1.1rem;
+  color: var(--muted);
+  line-height: 1.65;
+  margin-bottom: 2rem;
+  max-width: 600px;
+}
+.hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  font-family: 'DM Mono', monospace;
+  font-size: 11.5px;
+  color: var(--subtle);
+  letter-spacing: 0.03em;
+  flex-wrap: wrap;
+}
+.hero-meta span { display: flex; align-items: center; gap: 5px; }
+
+/* === ARTICLE BODY =================================================== */
+article {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 3.5rem 2rem;
+}
+
+/* Headings */
+article h2 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1.4rem;
+  letter-spacing: -0.02em;
+  margin: 3rem 0 1rem;
+  color: var(--text);
+  position: relative;
+  padding-left: 1.1rem;
+}
+article h2::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0.2em; bottom: 0.2em;
+  width: 3px;
+  background: var(--green);
+  border-radius: 2px;
+}
+article h2:first-child { margin-top: 0; }
+
+/* Body text */
+article p {
+  margin-bottom: 1.5rem;
+  color: #c8c8d8;
+  font-size: 1.02rem;
+  font-weight: 300;
+}
+article p strong { color: var(--text); font-weight: 500; }
+
+/* Lists */
+article ul, article ol {
+  margin: 0 0 1.5rem 0;
+  padding-left: 1.5rem;
+}
+article li {
+  color: #c8c8d8;
+  font-size: 1.02rem;
+  font-weight: 300;
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+}
+article li strong { color: var(--text); font-weight: 500; }
+
+/* Pull quote */
+.pull-quote {
+  border-left: 2px solid var(--green);
+  margin: 2.5rem 0;
+  padding: 1.25rem 1.5rem;
+  background: var(--surface);
+  border-radius: 0 8px 8px 0;
+}
+.pull-quote p {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text) !important;
+  line-height: 1.55;
+  margin: 0 !important;
+  letter-spacing: -0.01em;
+}
+
+/* Callout boxes */
+.callout {
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin: 2rem 0;
+  background: var(--surface);
+}
+.callout-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.callout-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.callout p { margin: 0 !important; font-size: 0.95rem !important; }
+
+/* Divider */
+.section-break {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 3rem 0;
+  position: relative;
+}
+.section-break::after {
+  content: '◆';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  background: var(--bg);
+  color: var(--border2);
+  font-size: 10px;
+  padding: 0 0.75rem;
+}
+
+/* Mode table */
+.mode-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2rem 0;
+  font-size: 0.9rem;
+}
+.mode-table th {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border2);
+  text-align: left;
+}
+.mode-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: #c8c8d8;
+  font-weight: 300;
+}
+.mode-table tr:last-child td { border-bottom: none; }
+.mode-table tr:hover td { background: var(--surface); }
+.badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 9.5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  display: inline-block;
+}
+.badge-blue   { background: var(--blue-bg);   color: var(--blue); }
+.badge-amber  { background: var(--amber-bg);  color: var(--amber); }
+.badge-purple { background: var(--purple-bg); color: var(--purple); }
+
+/* === TRY THE APP SECTION =========================================== */
+.app-section {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 5rem 2rem;
+}
+.app-inner {
+  max-width: 700px;
+  margin: 0 auto;
+}
+.section-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-eyebrow::before {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 1.5px;
+  background: var(--green);
+}
+.app-section h2 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  letter-spacing: -0.03em;
+  margin-bottom: 0.85rem;
+}
+.app-section .sub {
+  color: var(--muted);
+  font-size: 1rem;
+  margin-bottom: 2.5rem;
+  max-width: 520px;
+  line-height: 1.65;
+}
+.app-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+.app-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.1rem;
+}
+.app-card-icon { font-size: 1.3rem; margin-bottom: 0.5rem; display: block; }
+.app-card h4 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.82rem;
+  margin-bottom: 0.25rem;
+  letter-spacing: -0.01em;
+}
+.app-card p { font-size: 0.78rem; color: var(--muted); line-height: 1.5; margin: 0; font-weight: 400; }
+.cta-row {
+  display: flex;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.btn-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.75rem 1.6rem;
+  background: var(--green);
+  color: #000;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: -0.01em;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all var(--tx);
+}
+.btn-cta:hover { opacity: 0.88; transform: translateY(-1px); }
+.btn-cta-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.75rem 1.4rem;
+  background: transparent;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  font-size: 0.9rem;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all var(--tx);
+}
+.btn-cta-outline:hover { border-color: var(--green); color: var(--green); }
+.local-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1.1rem;
+}
+.local-badge::before { content: '🔒'; font-size: 12px; }
+
+/* === CONTACT SECTION ================================================ */
+.contact-section {
+  padding: 5rem 2rem;
+  max-width: 700px;
+  margin: 0 auto;
+}
+.contact-section h2 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.75rem;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.75rem;
+}
+.contact-section .sub {
+  color: var(--muted);
+  font-size: 1rem;
+  margin-bottom: 2.5rem;
+  max-width: 480px;
+  line-height: 1.65;
+}
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+.contact-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-decoration: none;
+  color: var(--text);
+  transition: all var(--tx);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.contact-card:hover { border-color: var(--border2); background: var(--surface2); transform: translateY(-2px); }
+.contact-card-icon { font-size: 1.5rem; }
+.contact-card h3 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; }
+.contact-card p  { font-size: 0.82rem; color: var(--muted); line-height: 1.5; margin: 0; }
+
+/* Contact form */
+.contact-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 2rem;
+}
+.contact-form h3 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 0.3rem;
+}
+.contact-form .form-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+}
+.form-row { margin-bottom: 1rem; }
+.form-label {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.form-input, .form-select, .form-textarea {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 7px;
+  padding: 9px 12px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color var(--tx);
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--green); }
+.form-select { cursor: pointer; }
+.form-select option { background: var(--surface2); }
+.form-textarea { resize: vertical; min-height: 110px; line-height: 1.6; }
+.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.btn-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.65rem 1.5rem;
+  background: var(--green);
+  color: #000;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  transition: all var(--tx);
+  margin-top: 0.25rem;
+}
+.btn-send:hover { opacity: 0.88; transform: translateY(-1px); }
+.form-note {
+  font-size: 11.5px;
+  color: var(--subtle);
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  line-height: 1.5;
+}
+
+/* === FOOTER ========================================================= */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 2.5rem 2rem;
+}
+.footer-inner {
+  max-width: 700px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.footer-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.footer-links {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+.footer-links a {
+  font-family: 'DM Mono', monospace;
+  font-size: 11.5px;
+  color: var(--muted);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+  transition: color var(--tx);
+}
+.footer-links a:hover { color: var(--text); }
+.footer-copy {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--subtle);
+  letter-spacing: 0.02em;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+/* === HOW TO USE SECTION ============================================= */
+.how-to-use {
+  padding: 5rem 2rem;
+  border-bottom: 1px solid var(--border);
+}
+.how-to-use-inner {
+  max-width: 700px;
+  margin: 0 auto;
+}
+.how-to-use h2 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  letter-spacing: -0.03em;
+  margin-bottom: 0.85rem;
+}
+.how-to-use .sub {
+  color: var(--muted);
+  font-size: 1rem;
+  margin-bottom: 2.5rem;
+  max-width: 520px;
+  line-height: 1.65;
+}
+.steps-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.step-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.4rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.step-badge {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  background: rgba(110,231,160,0.12);
+  border: 1px solid rgba(110,231,160,0.25);
+  color: var(--green);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-card h4 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.step-card p {
+  font-size: 0.83rem;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+}
+.step-card code {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--green);
+  background: rgba(110,231,160,0.07);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.how-to-tips {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+.how-to-tips .tip-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.how-to-tips .tip-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.tips-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.tips-list li {
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  line-height: 1.55;
+}
+.tips-list li::before {
+  content: '→';
+  color: var(--green);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* === RESPONSIVE ===================================================== */
+@media (max-width: 600px) {
+  .hero  { padding: 3rem 1.25rem 2.5rem; }
+  article { padding: 2.5rem 1.25rem; }
+  .app-section    { padding: 3.5rem 1.25rem; }
+  .how-to-use     { padding: 3.5rem 1.25rem; }
+  .steps-grid     { grid-template-columns: 1fr; }
+  .contact-section { padding: 3.5rem 1.25rem; }
+  .contact-grid   { grid-template-columns: 1fr; }
+  .form-row-2     { grid-template-columns: 1fr; }
+  footer { padding: 2rem 1.25rem; }
+  .footer-inner   { flex-direction: column; align-items: flex-start; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────────────────────────── -->
+<nav>
+  <a class="nav-logo" href="data_anonymizer.html">
+    <div class="logo-dot"></div>DataMask
+  </a>
+  <a class="nav-cta" href="data_anonymizer.html">Try the app →</a>
+</nav>
+
+<!-- ── HERO ─────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-tags">
+    <span class="tag tag-featured">Featured</span>
+    <span class="tag">Privacy</span>
+    <span class="tag">Research</span>
+    <span class="tag">AI Workflows</span>
+  </div>
+  <h1>Why I Built a Local-First Data Anonymizer for AI Workflows</h1>
+  <p class="hero-sub">On the quiet privacy risks of uploading research data to AI tools — and a practical solution that keeps your data entirely on your device.</p>
+  <div class="hero-meta">
+    <span>May 2026</span>
+    <span>·</span>
+    <span>8 min read</span>
+    <span>·</span>
+    <span>100% LOCAL — NO DATA SENT</span>
+  </div>
+</div>
+
+<!-- ── ARTICLE ──────────────────────────────────────────────────────── -->
+<article>
+
+  <p>There is a moment that most researchers working with AI tools have probably experienced: you have a dataset open, you want a quick analysis or a code snippet that handles your specific column structure, and the fastest path forward is to paste the data directly into the chat.</p>
+
+  <p>It works. It's useful. And it carries a risk that is easy to overlook.</p>
+
+  <hr class="section-break"/>
+
+  <h2>The Problem With Uploading Real Data to AI Systems</h2>
+
+  <p>When you upload a file or paste data into an AI tool, that data enters a system you do not control. Depending on the platform, the service's data handling policies, and your account type, your data may be:</p>
+
+  <ul>
+    <li><strong>Logged</strong> for safety review or quality assurance</li>
+    <li><strong>Retained</strong> for a period after the session ends</li>
+    <li><strong>Used to improve models</strong> if you haven't explicitly opted out</li>
+    <li><strong>Accessible to employees</strong> under certain review conditions</li>
+  </ul>
+
+  <p>For many use cases, this is an acceptable trade-off. For researchers working with unpublished experimental results, proprietary datasets, patient-adjacent data, sample identifiers tied to ongoing studies, or commercially sensitive measurements — it is not.</p>
+
+  <div class="pull-quote">
+    <p>The risk is not hypothetical or paranoid. It is simply a consequence of how most cloud AI systems are architected: your data goes to a server, and what happens after that is governed by a terms-of-service document that most people do not read carefully.</p>
+  </div>
+
+  <h2>What Researchers Actually Need</h2>
+
+  <p>The most common use of AI tools in research workflows is not to share the data — it's to get help <em>working with</em> the data. You want to:</p>
+
+  <ul>
+    <li>Generate analysis code that handles your column structure</li>
+    <li>Debug a script that processes your specific format</li>
+    <li>Ask for statistical guidance on your experimental design</li>
+    <li>Explore visualization options for a particular dataset shape</li>
+  </ul>
+
+  <p>None of these tasks actually require the AI to see your real values. A dataset with fake sample IDs, anonymized group labels, and plausible-but-synthetic numeric measurements is almost always sufficient. The AI doesn't know or care whether <code style="font-family:'DM Mono',monospace;font-size:.9em;color:var(--blue)">SAMPLE_001</code> used to be <code style="font-family:'DM Mono',monospace;font-size:.9em;color:var(--muted)">ACC_2024_Cohort_B_strain_47</code>.</p>
+
+  <p>The problem is that anonymizing data properly, consistently, and quickly has always required extra tooling — or trusting cloud services with the original data to do it. Neither option felt right.</p>
+
+  <hr class="section-break"/>
+
+  <h2>Building DataMask</h2>
+
+  <p>DataMask started as a straightforward idea: a single HTML file that anonymizes data entirely in the browser, with no backend, no upload, and no retained state.</p>
+
+  <p>The key design constraint was that the tool had to be useful <em>before</em> you trust any external service. That meant everything — column detection, numeric transformations, cryptographic hashing, text label substitution — had to run inside the browser's JavaScript engine. The data never touches a server.</p>
+
+  <p>Three anonymization tiers cover different threat models:</p>
+
+  <table class="mode-table">
+    <thead>
+      <tr><th>Mode</th><th>Method</th><th>Reversibility</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Lite</strong></td>
+        <td>Noise, shuffle, replace, or scale &amp; shift</td>
+        <td><span class="badge badge-blue">Reversible with effort</span></td>
+      </tr>
+      <tr>
+        <td><strong>Strong</strong></td>
+        <td>Normalize → sigmoid distortion → cross-column mixing</td>
+        <td><span class="badge badge-amber">Practically irreversible</span></td>
+      </tr>
+      <tr>
+        <td><strong>Vault</strong></td>
+        <td>SHA-256 per-cell seed → PRNG synthetic values</td>
+        <td><span class="badge badge-purple">Cryptographically irreversible</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>Text columns — sample names, strain identifiers, experimental group labels, metadata — are handled separately. DataMask replaces each unique text value with a consistent label (<code style="font-family:'DM Mono',monospace;font-size:.9em;color:var(--green)">SAMPLE_001</code>, <code style="font-family:'DM Mono',monospace;font-size:.9em;color:var(--green)">SAMPLE_002</code>, …) in order of first appearance. The same original value always maps to the same label, so relational structure is preserved without leaking anything real. And the mapping is exportable, so nothing is lost.</p>
+
+  <h2>Why Client-Side Matters</h2>
+
+  <p>Running entirely in the browser is not just a technical choice — it's an architectural statement about where trust should live.</p>
+
+  <p>When a tool processes your data locally, you can verify exactly what it does. The source code is in the page. There is no API call to audit, no server log to request, no data retention policy to read carefully. The data is processed and stays on your machine.</p>
+
+  <div class="callout">
+    <div class="callout-label">Note</div>
+    <p>A cloud anonymization service that handles your data <em>in order to anonymize it</em> is, by definition, a service that has seen your original data. The privacy guarantee depends entirely on how much you trust that service's infrastructure, employees, and policies. A local tool removes that dependency entirely.</p>
+  </div>
+
+  <h2>The Practical Upside</h2>
+
+  <p>In practice, this approach works well for the most common AI-assisted research workflows:</p>
+
+  <p><strong>Getting analysis code written.</strong> Paste an anonymized version of your dataset into the chat. The AI can see your column structure, data types, and approximate value ranges. It can generate working code. You then run that code on your real data, locally, without it ever going anywhere.</p>
+
+  <p><strong>Debugging data processing scripts.</strong> Share a synthetic version of your problematic dataset. The AI can help you trace the issue without seeing proprietary identifiers or real measurement values.</p>
+
+  <p><strong>Exploring statistical approaches.</strong> Anonymized data with preserved distributional shape (DataMask's Vault mode, with shape-preservation enabled) gives the AI enough information to give meaningful statistical guidance without exposing your actual results.</p>
+
+  <p><strong>Sharing with collaborators.</strong> Anonymized data can be shared with external collaborators, submitted to early review processes, or attached to working drafts without concern about premature disclosure.</p>
+
+  <hr class="section-break"/>
+
+  <h2>What DataMask Is Not</h2>
+
+  <p>DataMask is not a formal data de-identification tool compliant with HIPAA, GDPR, or other regulatory frameworks. It does not perform entity recognition on free text, does not scrub metadata from file formats, and does not provide certified anonymization guarantees.</p>
+
+  <p>It is a practical utility for researchers who want a fast, local, trustworthy way to prepare datasets for use in AI-assisted workflows — and who understand that the goal is to share the <em>structure</em> of the data, not the data itself.</p>
+
+  <p>If you are working with data that requires regulatory-grade anonymization, you should use tools built and certified for that purpose.</p>
+
+  <p style="color:var(--muted);font-style:italic;font-size:.95rem">DataMask is open source under the MIT license. The full source is a single readable HTML file.</p>
+
+</article>
+
+<!-- ── TRY THE APP ──────────────────────────────────────────────────── -->
+<div class="app-section">
+  <div class="app-inner">
+    <div class="section-eyebrow">The Tool</div>
+    <h2>Try DataMask</h2>
+    <p class="sub">A single HTML file. No installation, no account, no data sent anywhere. Open it in your browser and start anonymizing.</p>
+    <div class="app-cards">
+      <div class="app-card">
+        <span class="app-card-icon">📂</span>
+        <h4>Upload any format</h4>
+        <p>.xlsx, .xls, .csv, .txt — or paste directly from clipboard</p>
+      </div>
+      <div class="app-card">
+        <span class="app-card-icon">🔵</span>
+        <h4>Three protection tiers</h4>
+        <p>Lite, Strong, or Vault — from fast obfuscation to cryptographic irreversibility</p>
+      </div>
+      <div class="app-card">
+        <span class="app-card-icon">🏷️</span>
+        <h4>Text label substitution</h4>
+        <p>Sample IDs, strain names, group labels → SAMPLE_001, SAMPLE_002, …</p>
+      </div>
+      <div class="app-card">
+        <span class="app-card-icon">📋</span>
+        <h4>Five export formats</h4>
+        <p>Download as XLSX, CSV, TSV, TXT, or JSON — with a custom filename</p>
+      </div>
+    </div>
+    <div class="cta-row">
+      <a class="btn-cta" href="data_anonymizer.html">Open DataMask →</a>
+      <a class="btn-cta-outline" href="https://github.com/mbaffour/datamask" target="_blank" rel="noopener">View source on GitHub</a>
+    </div>
+    <div class="local-badge">100% local — all processing happens in your browser. Nothing is transmitted.</div>
+  </div>
+</div>
+
+<!-- ── HOW TO USE ────────────────────────────────────────────────────── -->
+<div class="how-to-use">
+  <div class="how-to-use-inner">
+    <div class="section-eyebrow">Workflow</div>
+    <h2>How to Use DataMask</h2>
+    <p class="sub">Four steps. No installation. Your data never leaves the browser.</p>
+
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-badge">01</div>
+        <h4>Upload Your Data</h4>
+        <p>Drag and drop a file onto the upload zone, click to browse, or paste CSV/TSV directly from the clipboard. Supports <code>.xlsx</code>, <code>.xls</code>, <code>.csv</code>, and <code>.txt</code> formats. Multi-sheet Excel files let you select the active sheet.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-badge">02</div>
+        <h4>Select Columns</h4>
+        <p>Column types are auto-detected — numeric or text. Check the columns you want to anonymize. You can select any mix of numeric and text columns. A preview of your data is shown before you commit.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-badge">03</div>
+        <h4>Choose Protection Mode</h4>
+        <p>Pick the tier that matches your threat model. <strong style="color:var(--blue)">Lite</strong> is fast and reversible. <strong style="color:var(--amber)">Strong</strong> uses sigmoid distortion and is practically irreversible. <strong style="color:var(--purple)">Vault</strong> uses SHA-256 and is cryptographically irreversible. Vault mode requires HTTPS or localhost.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-badge">04</div>
+        <h4>Download</h4>
+        <p>Export the anonymized data as <code>.xlsx</code>, <code>.csv</code>, <code>.tsv</code>, <code>.txt</code>, or <code>.json</code>. A filename prompt appears before every download. Optionally export the original→label mapping as CSV or JSON for full traceability.</p>
+      </div>
+    </div>
+
+    <div class="how-to-tips">
+      <div class="tip-label">Good to know</div>
+      <ul class="tips-list">
+        <li>Text columns (sample names, strain IDs, group labels) are replaced with consistent <code style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--green);background:rgba(110,231,160,0.07);padding:1px 5px;border-radius:3px">SAMPLE_001</code>, <code style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--green);background:rgba(110,231,160,0.07);padding:1px 5px;border-radius:3px">SAMPLE_002</code>, … tokens — the same original value always maps to the same label across all rows.</li>
+        <li>Use the Re-anonymize button on the results screen to apply additional rounds of obfuscation for extra protection.</li>
+        <li>Copy the anonymized output directly to clipboard as CSV — no download required when pasting into a chat.</li>
+        <li>No data is stored between sessions. Closing or refreshing the tab wipes everything.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONTACT ──────────────────────────────────────────────────────── -->
+<div class="contact-section">
+  <div class="section-eyebrow">Get in Touch</div>
+  <h2>Issues &amp; Improvements</h2>
+  <p class="sub">Found a bug? Have a feature idea? Want to share how you're using DataMask? I'd genuinely like to hear from you.</p>
+
+  <div class="contact-grid">
+    <a class="contact-card" href="https://github.com/mbaffour/datamask/issues/new?template=bug_report.md&labels=bug" target="_blank" rel="noopener">
+      <span class="contact-card-icon">🐛</span>
+      <h3>Report a bug</h3>
+      <p>Something isn't working as expected? Open a GitHub issue with the details.</p>
+    </a>
+    <a class="contact-card" href="https://github.com/mbaffour/datamask/issues/new?template=feature_request.md&labels=enhancement" target="_blank" rel="noopener">
+      <span class="contact-card-icon">💡</span>
+      <h3>Request a feature</h3>
+      <p>Have an idea for a new anonymization mode, export format, or workflow improvement?</p>
+    </a>
+  </div>
+
+  <div class="contact-form">
+    <h3>Send a message</h3>
+    <p class="form-sub">Prefer not to use GitHub? Send a message directly — it'll open in your email client.</p>
+    <div class="form-row form-row-2">
+      <div>
+        <label class="form-label" for="cf-name">Your name</label>
+        <input class="form-input" type="text" id="cf-name" placeholder="Jane Smith"/>
+      </div>
+      <div>
+        <label class="form-label" for="cf-email">Your email</label>
+        <input class="form-input" type="email" id="cf-email" placeholder="jane@university.edu"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="cf-type">Type</label>
+      <select class="form-select" id="cf-type">
+        <option value="Bug report">Bug report</option>
+        <option value="Feature request">Feature request</option>
+        <option value="General feedback">General feedback</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="cf-message">Message</label>
+      <textarea class="form-textarea" id="cf-message" placeholder="Describe the issue or idea…"></textarea>
+    </div>
+    <button class="btn-send" onclick="sendEmail()">Send message →</button>
+    <p class="form-note">ℹ&nbsp; This opens your default email client with the message pre-filled. No data is sent through this page.</p>
+  </div>
+</div>
+
+<!-- ── FOOTER ───────────────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-inner">
+    <a class="footer-logo" href="data_anonymizer.html">
+      <div class="logo-dot"></div>DataMask
+    </a>
+    <div class="footer-links">
+      <a href="data_anonymizer.html">App</a>
+      <a href="https://github.com/mbaffour/datamask" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/mbaffour/datamask/blob/master/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      <a href="https://github.com/mbaffour/datamask/issues" target="_blank" rel="noopener">Issues</a>
+    </div>
+    <p class="footer-copy">Built with passion for science and discovery.</p>
+  </div>
+</footer>
+
+<script>
+function sendEmail() {
+  const name    = document.getElementById('cf-name').value.trim();
+  const email   = document.getElementById('cf-email').value.trim();
+  const type    = document.getElementById('cf-type').value;
+  const message = document.getElementById('cf-message').value.trim();
+
+  if (!message) {
+    document.getElementById('cf-message').focus();
+    return;
+  }
+
+  const subject = encodeURIComponent(`DataMask — ${type}`);
+  const body    = encodeURIComponent(
+    `Type: ${type}\n` +
+    (name  ? `From: ${name}\n`  : '') +
+    (email ? `Reply-to: ${email}\n` : '') +
+    `\n${message}\n\n---\nSent from datamask blog`
+  );
+
+  // Replace with your actual email address
+  window.location.href = `mailto:feedback@datamask.dev?subject=${subject}&body=${body}`;
+}
+</script>
+
+</body>
+</html>

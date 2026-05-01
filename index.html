@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DataMask — Local-First Data Anonymization for Researchers</title>
+<meta name="description" content="Anonymize your research data entirely in the browser before uploading to AI tools. No backend, no server, no data transmitted. Free and open source."/>
+<meta property="og:title" content="DataMask — Local-First Data Anonymization"/>
+<meta property="og:description" content="Anonymize sensitive research data entirely in your browser. Three protection tiers. Zero data transmitted."/>
+<meta property="og:type" content="website"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+
+/* === RESET & TOKENS ================================================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:         #0c0c0f;
+  --surface:    #141417;
+  --surface2:   #1c1c21;
+  --surface3:   #242429;
+  --border:     rgba(255,255,255,0.06);
+  --border2:    rgba(255,255,255,0.12);
+  --text:       #eeeef2;
+  --muted:      #77778a;
+  --subtle:     #55556a;
+  --green:      #6ee7a0;
+  --blue:       #60c8f0;
+  --amber:      #f5a742;
+  --purple:     #b48cf5;
+  --green-bg:   rgba(110,231,160,0.08);
+  --blue-bg:    rgba(96,200,240,0.08);
+  --amber-bg:   rgba(245,167,66,0.08);
+  --purple-bg:  rgba(180,140,245,0.08);
+  --tx: 0.2s ease;
+}
+
+/* === BASE =========================================================== */
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: rgba(110,231,160,0.25); }
+a { color: inherit; text-decoration: none; }
+
+/* === NAV ============================================================ */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
+  background: rgba(12,12,15,0.92);
+  backdrop-filter: blur(12px);
+  padding: 0 2rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text);
+}
+.logo-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2.5s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+.nav-link {
+  font-family: 'DM Mono', monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  transition: color var(--tx);
+}
+.nav-link:hover { color: var(--text); }
+.nav-cta {
+  font-family: 'DM Mono', monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--green);
+  background: var(--green-bg);
+  border: 1px solid rgba(110,231,160,0.25);
+  padding: 6px 14px;
+  border-radius: 6px;
+  transition: all var(--tx);
+}
+.nav-cta:hover { background: rgba(110,231,160,0.15); border-color: rgba(110,231,160,0.4); }
+
+/* === HERO =========================================================== */
+.hero {
+  min-height: calc(85vh - 56px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 50% at 50% 30%, rgba(110,231,160,0.055) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-inner {
+  max-width: 700px;
+  position: relative;
+}
+.hero-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(110,231,160,0.2);
+  background: rgba(110,231,160,0.06);
+  padding: 5px 14px;
+  border-radius: 20px;
+}
+.hero h1 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  margin-bottom: 1.4rem;
+}
+.hero h1 em {
+  font-style: normal;
+  color: var(--green);
+}
+.hero-sub {
+  font-size: 1.1rem;
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 520px;
+  margin: 0 auto 2.5rem;
+}
+.hero-cta-row {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0.85rem 2rem;
+  background: var(--green);
+  color: #000;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  border-radius: 9px;
+  transition: all var(--tx);
+}
+.btn-primary:hover { opacity: 0.88; transform: translateY(-2px); }
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0.85rem 1.75rem;
+  background: transparent;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  font-size: 0.95rem;
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  transition: all var(--tx);
+}
+.btn-secondary:hover { border-color: var(--green); color: var(--green); }
+.hero-trust {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--subtle);
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.hero-trust span { display: flex; align-items: center; gap: 0.4rem; }
+.hero-trust .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--subtle); }
+
+/* === SECTION COMMON ================================================= */
+.section-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-eyebrow::before {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 1.5px;
+  background: var(--green);
+}
+.section-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  letter-spacing: -0.03em;
+  margin-bottom: 0.85rem;
+}
+.section-sub {
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.65;
+  max-width: 520px;
+  margin-bottom: 3rem;
+}
+
+/* === FEATURES ======================================================= */
+.features {
+  padding: 5rem 2rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.features-inner {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.features-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.feature-card {
+  background: var(--surface);
+  padding: 2rem;
+  transition: background var(--tx);
+}
+.feature-card:hover { background: var(--surface2); }
+.feature-icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+}
+.feature-icon-green  { background: rgba(110,231,160,0.1);  border: 1px solid rgba(110,231,160,0.2); }
+.feature-icon-blue   { background: rgba(96,200,240,0.1);   border: 1px solid rgba(96,200,240,0.2); }
+.feature-icon-amber  { background: rgba(245,167,66,0.1);   border: 1px solid rgba(245,167,66,0.2); }
+.feature-icon-purple { background: rgba(180,140,245,0.1);  border: 1px solid rgba(180,140,245,0.2); }
+.feature-card h3 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 0.45rem;
+  letter-spacing: -0.01em;
+}
+.feature-card p {
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.feature-card code {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--green);
+  background: rgba(110,231,160,0.07);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* Mode badges inside feature */
+.mode-badges {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+.mbadge {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+.mbadge-blue   { background: var(--blue-bg);   color: var(--blue);   border: 1px solid rgba(96,200,240,0.2); }
+.mbadge-amber  { background: var(--amber-bg);  color: var(--amber);  border: 1px solid rgba(245,167,66,0.2); }
+.mbadge-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(180,140,245,0.2); }
+
+/* === HOW IT WORKS =================================================== */
+.how-it-works {
+  padding: 5rem 2rem;
+  border-top: 1px solid var(--border);
+}
+.how-it-works-inner {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.steps-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.step-cell {
+  background: var(--bg);
+  padding: 1.75rem 1.5rem;
+  transition: background var(--tx);
+  position: relative;
+}
+.step-cell:hover { background: var(--surface); }
+.step-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--green);
+  margin-bottom: 0.75rem;
+  opacity: 0.7;
+}
+.step-cell h4 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+}
+.step-cell p {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* === OPEN SOURCE CALLOUT ============================================ */
+.oss-callout {
+  padding: 5rem 2rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  text-align: center;
+}
+.oss-inner {
+  max-width: 560px;
+  margin: 0 auto;
+}
+.oss-callout h2 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  letter-spacing: -0.03em;
+  margin-bottom: 0.75rem;
+}
+.oss-callout p {
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.65;
+  margin-bottom: 2rem;
+}
+.oss-cta-row {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.oss-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--subtle);
+  letter-spacing: 0.04em;
+  margin-top: 1.25rem;
+}
+
+/* === FOOTER ========================================================= */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 2.5rem 2rem;
+}
+.footer-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.footer-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.footer-links {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+.footer-links a {
+  font-family: 'DM Mono', monospace;
+  font-size: 11.5px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  transition: color var(--tx);
+}
+.footer-links a:hover { color: var(--text); }
+.footer-copy {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--subtle);
+  letter-spacing: 0.02em;
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+/* === RESPONSIVE ===================================================== */
+@media (max-width: 700px) {
+  .hero { min-height: auto; padding: 4rem 1.25rem; }
+  .features { padding: 3.5rem 1.25rem; }
+  .features-grid { grid-template-columns: 1fr; }
+  .how-it-works { padding: 3.5rem 1.25rem; }
+  .steps-row { grid-template-columns: 1fr 1fr; }
+  .oss-callout { padding: 3.5rem 1.25rem; }
+  footer { padding: 2rem 1.25rem; }
+  .footer-inner { flex-direction: column; align-items: flex-start; }
+  .nav-links .nav-link { display: none; }
+}
+@media (max-width: 420px) {
+  .steps-row { grid-template-columns: 1fr; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-logo">
+    <div class="logo-dot"></div>DataMask
+  </div>
+  <div class="nav-links">
+    <a class="nav-link" href="blog.html">Blog</a>
+    <a class="nav-link" href="https://github.com/mbaffour/datamask" target="_blank" rel="noopener">GitHub</a>
+    <a class="nav-cta" href="data_anonymizer.html">Launch app →</a>
+  </div>
+</nav>
+
+<!-- ── HERO ─────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-eyebrow">Privacy-First Data Anonymization</div>
+    <h1>Anonymize your research data<br/><em>before it leaves your machine.</em></h1>
+    <p class="hero-sub">Most AI tools log what you upload. DataMask anonymizes your datasets entirely in the browser — no server, no backend, no data transmitted — so you can safely use AI tools without exposing real values.</p>
+    <div class="hero-cta-row">
+      <a class="btn-primary" href="data_anonymizer.html">Launch DataMask →</a>
+      <a class="btn-secondary" href="blog.html">Read how it works →</a>
+    </div>
+    <div class="hero-trust">
+      <span>100% local</span>
+      <span class="dot"></span>
+      <span>No upload</span>
+      <span class="dot"></span>
+      <span>No backend</span>
+      <span class="dot"></span>
+      <span>Open source · MIT</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ─────────────────────────────────────────────────────── -->
+<section class="features">
+  <div class="features-inner">
+    <div class="section-eyebrow">Why DataMask</div>
+    <h2 class="section-title">Everything runs in your browser</h2>
+    <p class="section-sub">No account required. No installation. Open the file and start anonymizing — your data never touches a server.</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-green">🔒</div>
+        <h3>100% Local Processing</h3>
+        <p>Every transformation — noise injection, sigmoid distortion, SHA-256 hashing — happens inside the browser's JavaScript engine. There is no API call, no server log, no data retention policy to worry about.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-blue">⚡</div>
+        <h3>Three Protection Tiers</h3>
+        <p>Choose the level of anonymization that fits your workflow.</p>
+        <div class="mode-badges">
+          <span class="mbadge mbadge-blue">Lite — reversible</span>
+          <span class="mbadge mbadge-amber">Strong — sigmoid distortion</span>
+          <span class="mbadge mbadge-purple">Vault — SHA-256 cryptographic</span>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-amber">🏷️</div>
+        <h3>Text Label Substitution</h3>
+        <p>Sample names, strain IDs, and group labels are replaced with consistent tokens (<code>SAMPLE_001</code>, <code>SAMPLE_002</code>, …). The same original value always maps to the same label. Export the mapping for full traceability.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-purple">📋</div>
+        <h3>Flexible Export</h3>
+        <p>Download anonymized data as <code>.xlsx</code>, <code>.csv</code>, <code>.tsv</code>, <code>.txt</code>, or <code>.json</code>. Copy directly to clipboard for instant paste into a chat. Custom filename prompt on every download.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ─────────────────────────────────────────────────── -->
+<section class="how-it-works">
+  <div class="how-it-works-inner">
+    <div class="section-eyebrow">Workflow</div>
+    <h2 class="section-title">Four steps. No setup.</h2>
+    <p class="section-sub" style="margin-bottom:2rem">From raw dataset to anonymized export in under a minute.</p>
+
+    <div class="steps-row">
+      <div class="step-cell">
+        <div class="step-num">STEP 01</div>
+        <h4>Upload</h4>
+        <p>Drag & drop or paste CSV from clipboard. Supports .xlsx, .xls, .csv, and .txt.</p>
+      </div>
+      <div class="step-cell">
+        <div class="step-num">STEP 02</div>
+        <h4>Select Columns</h4>
+        <p>Check the columns to anonymize. Types are auto-detected. Pick numeric, text, or both.</p>
+      </div>
+      <div class="step-cell">
+        <div class="step-num">STEP 03</div>
+        <h4>Choose Mode</h4>
+        <p>Lite, Strong, or Vault. Adjust noise level, decimal places, and shape-preservation options.</p>
+      </div>
+      <div class="step-cell">
+        <div class="step-num">STEP 04</div>
+        <h4>Download</h4>
+        <p>Export in your preferred format. Optionally download the original→label mapping.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── OPEN SOURCE ──────────────────────────────────────────────────── -->
+<section class="oss-callout">
+  <div class="oss-inner">
+    <div class="section-eyebrow" style="justify-content:center">Open Source</div>
+    <h2>Read the entire source in 5 minutes.</h2>
+    <p>DataMask is a single self-contained HTML file — no bundler, no framework, no hidden dependencies. Every transformation is visible in plain JavaScript. Fork it, embed it, or audit it.</p>
+    <div class="oss-cta-row">
+      <a class="btn-primary" href="data_anonymizer.html">Launch DataMask →</a>
+      <a class="btn-secondary" href="https://github.com/mbaffour/datamask" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+    <p class="oss-meta">MIT License · github.com/mbaffour/datamask</p>
+  </div>
+</section>
+
+<!-- ── FOOTER ───────────────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-inner">
+    <a class="footer-logo" href="data_anonymizer.html">
+      <div class="logo-dot"></div>DataMask
+    </a>
+    <div class="footer-links">
+      <a href="data_anonymizer.html">App</a>
+      <a href="blog.html">Blog</a>
+      <a href="https://github.com/mbaffour/datamask" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/mbaffour/datamask/blob/master/LICENSE" target="_blank" rel="noopener">MIT License</a>
+    </div>
+    <p class="footer-copy">© 2026 mbaffour · Built with passion for science and discovery.</p>
+  </div>
+</footer>
+
+</body>
+</html>
