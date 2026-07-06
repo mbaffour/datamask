@@ -800,6 +800,22 @@ function parseDelimitedText(text) {
 // ══════════════════════════════════════════════════════════════════════
 
 /**
+ * Escape a string for safe interpolation into innerHTML.
+ * Guards against DOM-XSS from file-controlled data (column headers, cell
+ * values, filenames) that flows into innerHTML sinks.
+ * @param {*} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Show a slide-in toast notification.
  * @param {string} message
  * @param {'success'|'error'|'warn'|'info'} type
@@ -809,7 +825,7 @@ function notify(message, type = 'info', duration = 3500) {
   const icons  = { success: '✓', error: '✕', warn: '⚠', info: 'ℹ' };
   const toast  = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `<span>${icons[type] ?? 'ℹ'}</span><span>${message}</span>`;
+  toast.innerHTML = `<span>${icons[type] ?? 'ℹ'}</span><span>${escapeHtml(message)}</span>`;
   $('toastContainer').appendChild(toast);
   requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('visible')));
   setTimeout(() => {
@@ -999,7 +1015,7 @@ function renderTable(rows, tableId, opts = {}) {
     if (selectable) {
       th.innerHTML = `<div class="col-hdr">
         <input type="checkbox" class="col-cb" data-col="${ci}" ${state.selectedCols.has(ci) ? 'checked' : ''}/>
-        <span>${h || 'col_' + (ci + 1)}</span>
+        <span>${escapeHtml(h || 'col_' + (ci + 1))}</span>
         <span class="ttag ttag-${state.colTypes[ci]}">${state.colTypes[ci].slice(0, 3)}</span>
       </div>`;
       if (state.selectedCols.has(ci)) th.classList.add('sel-col');
