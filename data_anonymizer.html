@@ -249,6 +249,65 @@ main {
 .mode-strong .mode-pill { background: var(--amber-bg);  color: var(--amber); }
 .mode-vault .mode-pill  { background: var(--purple-bg); color: var(--purple); }
 
+/* === PER-COLUMN MODE OVERRIDES ====================================== */
+.col-override {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 1rem;
+  margin-bottom: 1.75rem;
+  background: var(--surface2);
+}
+.col-override > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-family: 'Syne', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.35rem 0;
+}
+.col-override > summary::-webkit-details-marker { display: none; }
+.col-override > summary::before {
+  content: '▸';
+  color: var(--muted);
+  transition: transform var(--tx-fast);
+  display: inline-block;
+}
+.col-override[open] > summary::before { transform: rotate(90deg); }
+.col-override .small-note { margin-left: auto; text-align: right; }
+.override-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border);
+}
+.override-row .ov-name {
+  font-family: 'DM Mono', monospace;
+  font-size: 12.5px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.override-row .ttag { flex-shrink: 0; }
+.override-row select {
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+  flex-shrink: 0;
+}
+.override-row select:focus { border-color: var(--green); }
+.override-row select.is-override { border-color: var(--green); color: var(--green); }
+
 /* === SUB-METHOD CARDS =============================================== */
 .sub-grid {
   display: grid;
@@ -592,8 +651,8 @@ td.is-mod-vault  { color: var(--purple); }
       <div class="mode-card mode-strong" data-mode="strong">
         <span class="mode-icon">🟡</span>
         <div class="mode-name">Strong</div>
-        <div class="mode-desc">Normalizes to [0,1], applies non-linear sigmoid distortion with random parameters, then cross-mixes columns. Parameters are never stored.</div>
-        <span class="mode-pill">practically irreversible</span>
+        <div class="mode-desc">Normalizes to [0,1], applies non-linear sigmoid distortion with random parameters, then cross-mixes columns. Hard to reverse without a reference dataset — but the transform is monotonic, so rank order is largely preserved.</div>
+        <span class="mode-pill">hard to reverse · preserves rank</span>
       </div>
       <div class="mode-card mode-vault" data-mode="vault">
         <span class="mode-icon">🟣</span>
@@ -602,6 +661,19 @@ td.is-mod-vault  { color: var(--purple); }
         <span class="mode-pill">cryptographically irreversible</span>
       </div>
     </div>
+
+    <!-- PER-COLUMN MODE OVERRIDES (optional) -->
+    <details class="col-override" id="colOverride">
+      <summary>
+        <span>Per-column mode overrides</span>
+        <span class="small-note" id="overrideCount">optional — all columns use the global mode</span>
+      </summary>
+      <p class="panel-sub" style="margin:0.75rem 0">
+        Assign a different tier to individual columns. Anything left on <b>Global</b> uses the mode selected above.
+        Overrides let you, e.g., keep IDs in Vault while lightly perturbing measurements in Lite.
+      </p>
+      <div id="overrideList"></div>
+    </details>
 
     <!-- LITE OPTIONS -->
     <div id="liteOpts">
@@ -631,7 +703,7 @@ td.is-mod-vault  { color: var(--purple); }
     <div id="strongOpts" class="hidden">
       <div class="notice n-warn">
         <span>⚡</span>
-        <span><b>Strong mode</b> normalizes each column to [0,1], applies a random sigmoid distortion curve, then blends selected columns together. The random parameters are generated fresh each run and never stored — making reversal computationally infeasible even with the output in hand.</span>
+        <span><b>Strong mode</b> normalizes each column to [0,1], applies a random sigmoid distortion curve, then blends selected columns together. The random parameters are generated fresh each run and never stored, so the exact original values are hard to recover without a reference dataset. Note: the sigmoid is monotonic, so it largely <b>preserves rank order within a column</b> — the output can still be re-identified by rank or correlated against a known reference. For non-invertible synthetic values with no link to the originals, use <b>Vault mode</b>.</span>
       </div>
       <div class="ctrl-row">
         <span class="ctrl-label">Distortion strength</span>
@@ -729,6 +801,17 @@ td.is-mod-vault  { color: var(--purple); }
       </div>
     </div>
 
+    <!-- Run report — reproducibility log of this run (never contains original values) -->
+    <div class="mapping-section" id="reportSection">
+      <hr class="divider"/>
+      <div class="panel-title" style="font-size:.875rem;margin-bottom:.35rem">Download run report</div>
+      <p class="panel-sub">A log of this run — which columns, which mode(s), row counts, and a timestamp — for reproducibility and audit trails. Contains no original values.</p>
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn btn-outline" id="dlReportJson">↓ Report as JSON</button>
+        <button class="btn btn-outline" id="dlReportTxt">↓ Report as TXT</button>
+      </div>
+    </div>
+
     <hr class="divider"/>
     <div class="btn-row">
       <button class="btn btn-outline" id="backTo3">← Adjust settings</button>
@@ -773,6 +856,8 @@ const state = {
   selMode:        'lite',
   liteMethod:     'noise',
   textLabelMap:   {},       // { colIndex: { originalValue: 'SAMPLE_001', ... } }
+  colModeOverrides: {},     // { colIndex: 'lite'|'strong'|'vault' } — per-column mode override; empty ⇒ use global mode everywhere
+  lastRunReport:  null,     // details of the most recent anonymization run (for the downloadable report)
   lastObjectURLs: [],       // tracked object URLs for revocation on reset
 };
 
@@ -829,6 +914,9 @@ function goStep(n) {
     el.className = 'step' + (i === n ? ' active' : i < n ? ' done' : '');
     el.querySelector('.step-num').textContent = i < n ? '✓' : i;
   });
+  // Rebuild the per-column override list each time we enter the mode step,
+  // since the set of selected columns may have changed.
+  if (n === 3 && typeof renderOverrideList === 'function') renderOverrideList();
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1121,6 +1209,9 @@ document.querySelectorAll('.mode-card').forEach(card => {
                      location.hostname  !== 'localhost';
     $('httpWarning').classList.toggle('hidden', !insecure);
     if (insecure) notify('Vault mode requires HTTPS. This page is on HTTP — Vault mode may fail.', 'warn', 7000);
+
+    // Columns left on "Global" now resolve to the newly-selected mode — refresh the label.
+    updateOverrideSummary();
   });
 });
 
@@ -1131,6 +1222,70 @@ document.querySelectorAll('[data-lm]').forEach(card => {
     state.liteMethod = card.dataset.lm;
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════
+// PER-COLUMN MODE OVERRIDES
+// ══════════════════════════════════════════════════════════════════════
+
+const OVERRIDE_MODES = ['lite', 'strong', 'vault'];
+
+/** Update the summary note showing how many columns have an explicit override. */
+function updateOverrideSummary() {
+  const n = Object.keys(state.colModeOverrides).length;
+  const note = $('overrideCount');
+  if (!note) return;
+  note.textContent = n === 0
+    ? `optional — all columns use the global mode (${MODE_LABELS[state.selMode]})`
+    : `${n} column${n === 1 ? '' : 's'} overridden`;
+}
+
+/** Render one selectable row per currently-selected column. */
+function renderOverrideList() {
+  const list = $('overrideList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  // Drop overrides for columns that are no longer selected.
+  Object.keys(state.colModeOverrides).forEach(ci => {
+    if (!state.selectedCols.has(Number(ci))) delete state.colModeOverrides[ci];
+  });
+
+  [...state.selectedCols].sort((a, b) => a - b).forEach(ci => {
+    const row = document.createElement('div');
+    row.className = 'override-row';
+
+    const name = document.createElement('span');
+    name.className   = 'ov-name';
+    name.textContent = state.headers[ci] || 'col_' + (ci + 1);
+
+    const tag = document.createElement('span');
+    tag.className   = `ttag ttag-${state.colTypes[ci]}`;
+    tag.textContent = state.colTypes[ci].slice(0, 3);
+
+    const sel = document.createElement('select');
+    sel.dataset.col = ci;
+    const cur = state.colModeOverrides[ci] || '';
+    const opts = [['', 'Global']].concat(OVERRIDE_MODES.map(m => [m, MODE_LABELS[m]]));
+    opts.forEach(([val, label]) => {
+      const o = document.createElement('option');
+      o.value = val; o.textContent = label;
+      if (val === cur) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.classList.toggle('is-override', cur !== '');
+    sel.addEventListener('change', () => {
+      if (sel.value) state.colModeOverrides[ci] = sel.value;
+      else           delete state.colModeOverrides[ci];
+      sel.classList.toggle('is-override', sel.value !== '');
+      updateOverrideSummary();
+    });
+
+    row.append(name, tag, sel);
+    list.appendChild(row);
+  });
+
+  updateOverrideSummary();
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // RANGE CONTROL DISPLAYS
@@ -1152,10 +1307,11 @@ $('vaultDec').addEventListener('input',    () => $('vaultDecVal').textContent   
  * Build a deterministic original-value → SAMPLE_NNN map for every selected text column.
  * Populates state.textLabelMap.
  * @param {Array<Array>} rows
+ * @param {Iterable<number>} [cols=state.selectedCols]  columns to consider
  */
-function buildTextLabelMap(rows) {
+function buildTextLabelMap(rows, cols = state.selectedCols) {
   state.textLabelMap = {};
-  state.selectedCols.forEach(ci => {
+  cols.forEach(ci => {
     if (state.colTypes[ci] !== 'text') return;
     const map = {};
     let counter = 1;
@@ -1176,9 +1332,10 @@ function buildTextLabelMap(rows) {
  * Apply text label substitution to a copied row array.
  * @param {Array} nr   - new (output) row to modify in-place
  * @param {Array} row  - original row (used for key lookup)
+ * @param {Iterable<number>} [cols=state.selectedCols]  columns to consider
  */
-function applyTextLabels(nr, row) {
-  state.selectedCols.forEach(ci => {
+function applyTextLabels(nr, row, cols = state.selectedCols) {
+  cols.forEach(ci => {
     if (state.colTypes[ci] !== 'text') return;
     const map = state.textLabelMap[ci];
     if (!map) return;
@@ -1194,13 +1351,14 @@ function applyTextLabels(nr, row) {
 // ══════════════════════════════════════════════════════════════════════
 
 // ── LITE ─────────────────────────────────────────────────────────────
-function applyLite(rows) {
+// @param {Iterable<number>} [cols=state.selectedCols]  columns this engine owns
+function applyLite(rows, cols = state.selectedCols) {
   const pct      = parseInt($('liteNoise').value) / 100;
   const dec      = parseInt($('liteDec').value);
   const keepSign = $('liteSign').checked;
 
   const cs = {};
-  state.selectedCols.forEach(ci => {
+  cols.forEach(ci => {
     if (state.colTypes[ci] !== 'numeric') return;
     const vals = rows.map(r => Number(r[ci])).filter(n => !isNaN(n));
     cs[ci] = {
@@ -1214,7 +1372,7 @@ function applyLite(rows) {
 
   return rows.map(row => {
     const nr = [...row];
-    state.selectedCols.forEach(ci => {
+    cols.forEach(ci => {
       if (state.colTypes[ci] !== 'numeric') return;
       const v = row[ci];
       if (!isNum(v)) return;
@@ -1228,7 +1386,7 @@ function applyLite(rows) {
       if (keepSign && n !== 0) res = Math.abs(res) * Math.sign(n);
       nr[ci] = parseFloat(res.toFixed(dec));
     });
-    applyTextLabels(nr, row);
+    applyTextLabels(nr, row, cols);
     return nr;
   });
 }
@@ -1236,14 +1394,15 @@ function applyLite(rows) {
 // ── STRONG ───────────────────────────────────────────────────────────
 // Normalize → sigmoid distortion → cross-column mixing → rescale
 // All random parameters generated per-column and discarded — never stored
-function applyStrong(rows) {
+// @param {Iterable<number>} [cols=state.selectedCols]  columns this engine owns
+function applyStrong(rows, cols = state.selectedCols) {
   const distK    = parseInt($('strongDist').value);
   const mixPct   = parseInt($('strongMix').value) / 100;
   const outScale = parseInt($('strongScale').value);
   const dec      = parseInt($('strongDec').value);
 
   const cs = {};
-  state.selectedCols.forEach(ci => {
+  cols.forEach(ci => {
     if (state.colTypes[ci] !== 'numeric') return;
     const vals = rows.map(r => Number(r[ci])).filter(n => !isNaN(n));
     const mn   = Math.min(...vals);
@@ -1262,14 +1421,14 @@ function applyStrong(rows) {
   // Pass 1: normalize each selected cell to [0,1]
   const norm = rows.map(row => {
     const n = {};
-    state.selectedCols.forEach(ci => {
+    cols.forEach(ci => {
       if (!isNum(row[ci]) || !cs[ci]) return;
       n[ci] = clamp((Number(row[ci]) - cs[ci].mn) / cs[ci].rng, 0, 1);
     });
     return n;
   });
 
-  const colList = [...state.selectedCols].filter(ci => cs[ci]);
+  const colList = [...cols].filter(ci => cs[ci]);
 
   // Pass 2: sigmoid distortion + cross-column mixing + rescale to fixed fake range
   return rows.map((row, ri) => {
@@ -1295,7 +1454,7 @@ function applyStrong(rows) {
 
       nr[ci] = parseFloat((st.lo + v * (st.hi - st.lo)).toFixed(dec));
     });
-    applyTextLabels(nr, row);
+    applyTextLabels(nr, row, cols);
     return nr;
   });
 }
@@ -1326,13 +1485,14 @@ function normalSample(rng, mean, std) {
   return mean + std * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
-async function applyVault(rows, onProgress = null) {
+// @param {Iterable<number>} [cols=state.selectedCols]  columns this engine owns
+async function applyVault(rows, onProgress = null, cols = state.selectedCols) {
   const dec       = parseInt($('vaultDec').value);
   const keepShape = $('vaultShape').checked;
   const userSeed  = $('vaultSeed').value.trim() || 'rnd_' + Math.random().toString(36).slice(2);
 
   const cs = {};
-  state.selectedCols.forEach(ci => {
+  cols.forEach(ci => {
     if (state.colTypes[ci] !== 'numeric') return;
     const vals = rows.map(r => Number(r[ci])).filter(n => !isNaN(n));
     const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
@@ -1343,7 +1503,7 @@ async function applyVault(rows, onProgress = null) {
   const result = [];
   for (let ri = 0; ri < rows.length; ri++) {
     const nr = [...rows[ri]];
-    for (const ci of state.selectedCols) {
+    for (const ci of cols) {
       if (state.colTypes[ci] !== 'numeric') continue;
       const st = cs[ci];
       if (!st || !isNum(rows[ri][ci])) continue;
@@ -1358,7 +1518,7 @@ async function applyVault(rows, onProgress = null) {
       }
       nr[ci] = parseFloat(syn.toFixed(dec));
     }
-    applyTextLabels(nr, rows[ri]);
+    applyTextLabels(nr, rows[ri], cols);
     result.push(nr);
     if (onProgress) onProgress(ri + 1, rows.length);
     // Yield to browser event loop every 50 rows to keep UI responsive
@@ -1368,8 +1528,102 @@ async function applyVault(rows, onProgress = null) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// MODE DISPATCH  (global mode + optional per-column overrides)
+// ══════════════════════════════════════════════════════════════════════
+
+const MODE_LABELS = { lite: '🔵 Lite', strong: '🟡 Strong', vault: '🟣 Vault' };
+const MODE_CLS    = { lite: 'n-info',   strong: 'n-warn',    vault: 'n-purple' };
+
+/** Effective mode for a column: its override if set, else the global mode. */
+function effectiveMode(ci) {
+  return state.colModeOverrides[ci] || state.selMode;
+}
+
+/**
+ * Group the selected columns by their effective mode.
+ * @returns {{lite:Set<number>, strong:Set<number>, vault:Set<number>}}
+ */
+function groupColsByMode() {
+  const groups = { lite: new Set(), strong: new Set(), vault: new Set() };
+  state.selectedCols.forEach(ci => groups[effectiveMode(ci)].add(ci));
+  return groups;
+}
+
+/**
+ * Run anonymization over `rows`, honouring per-column overrides.
+ * Each engine only touches its own column group, so running them in sequence
+ * (feeding one output into the next) composes cleanly. When no overrides are
+ * set, exactly one group is non-empty and behaviour is identical to before.
+ * @param {Array<Array>} rows
+ * @param {(done:number,total:number)=>void|null} onVaultProgress
+ * @returns {Promise<{masked:Array<Array>, modesUsed:string[]}>}
+ */
+async function runAnonymization(rows, onVaultProgress = null) {
+  buildTextLabelMap(rows);                 // full map across every selected text column
+  const groups = groupColsByMode();
+  let data = rows;
+  const modesUsed = [];
+
+  if (groups.lite.size)   { data = applyLite(data, groups.lite);     modesUsed.push('lite'); }
+  if (groups.strong.size) { data = applyStrong(data, groups.strong); modesUsed.push('strong'); }
+  if (groups.vault.size)  { data = await applyVault(data, onVaultProgress, groups.vault); modesUsed.push('vault'); }
+
+  return { masked: data, modesUsed };
+}
+
+/** Does any selected column resolve to Vault mode (so the progress bar + crypto apply)? */
+function runUsesVault() {
+  return [...state.selectedCols].some(ci => effectiveMode(ci) === 'vault');
+}
+
+/**
+ * Build the run report describing what happened, and store it on state.
+ * @param {Array<Array>} rows      original rows
+ * @param {Array<Array>} masked    masked rows
+ * @param {string[]} modesUsed
+ */
+function buildRunReport(rows, masked, modesUsed) {
+  let changed = 0;
+  masked.forEach((row, ri) =>
+    state.selectedCols.forEach(ci => { if (row[ci] !== rows[ri][ci]) changed++; })
+  );
+
+  const columns = [...state.selectedCols].map(ci => ({
+    index:         ci,
+    name:          state.headers[ci] || 'col_' + (ci + 1),
+    type:          state.colTypes[ci],
+    mode:          effectiveMode(ci),
+    overridden:    Boolean(state.colModeOverrides[ci]),
+  }));
+
+  state.lastRunReport = {
+    tool:            'DataMask',
+    generated_at:    new Date().toISOString(),
+    source_file:     state.fileName,
+    sheet:           state.activeSheet || null,
+    global_mode:     state.selMode,
+    lite_method:     modesUsed.includes('lite') ? state.liteMethod : null,
+    modes_used:      modesUsed,
+    per_column_overrides: Object.keys(state.colModeOverrides).length > 0,
+    rows_processed:  rows.length,
+    total_columns:   state.headers.length,
+    columns_anonymized: state.selectedCols.size,
+    values_changed:  changed,
+    columns,
+    note:            'Generated locally in-browser. No data left this device. Original values are NOT included in this report.',
+  };
+  return changed;
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // RUN + PROGRESS
 // ══════════════════════════════════════════════════════════════════════
+
+const vaultProgressCb = (done, total) => {
+  const pct = Math.round((done / total) * 100);
+  $('vaultProgressFill').style.width = pct + '%';
+  $('vaultProgressPct').textContent  = pct + '%';
+};
 
 $('runMask').addEventListener('click', async () => {
   const btn  = $('runMask');
@@ -1377,31 +1631,19 @@ $('runMask').addEventListener('click', async () => {
   btn.disabled    = true;
   btn.textContent = 'Processing…';
 
-  buildTextLabelMap(rows);
-  if (state.selMode === 'vault') $('vaultProgress').classList.add('visible');
+  if (runUsesVault()) $('vaultProgress').classList.add('visible');
 
   try {
-    if (state.selMode === 'lite') {
-      state.maskedData = applyLite(rows);
-    } else if (state.selMode === 'strong') {
-      state.maskedData = applyStrong(rows);
-    } else {
-      state.maskedData = await applyVault(rows, (done, total) => {
-        const pct = Math.round((done / total) * 100);
-        $('vaultProgressFill').style.width = pct + '%';
-        $('vaultProgressPct').textContent  = pct + '%';
-      });
-    }
+    const { masked, modesUsed } = await runAnonymization(rows, vaultProgressCb);
+    state.maskedData = masked;
 
-    let changed = 0;
-    state.maskedData.forEach((row, ri) =>
-      state.selectedCols.forEach(ci => { if (row[ci] !== rows[ri][ci]) changed++; })
-    );
+    const changed = buildRunReport(rows, masked, modesUsed);
 
-    const modeLabel = { lite: '🔵 Lite mode', strong: '🟡 Strong mode', vault: '🟣 Vault mode' };
-    const modeCls   = { lite: 'n-info',       strong: 'n-warn',         vault: 'n-purple' };
-    $('modeUsed').innerHTML = `<div class="notice ${modeCls[state.selMode]}" style="display:inline-flex;margin-bottom:0">
-      <span>${modeLabel[state.selMode]} applied</span></div>`;
+    const badges = modesUsed.map(m =>
+      `<span class="notice ${MODE_CLS[m]}" style="display:inline-flex;margin:0 .4rem .4rem 0"><span>${MODE_LABELS[m]} mode</span></span>`
+    ).join('');
+    $('modeUsed').innerHTML = badges + (modesUsed.length > 1
+      ? '<div class="panel-sub" style="margin:0">Per-column overrides were applied — different columns used different modes.</div>' : '');
     $('doneMsg').textContent = `${changed.toLocaleString()} values anonymized across ${state.selectedCols.size} column(s) — ${rows.length.toLocaleString()} rows processed.`;
 
     $('mappingSection').classList.toggle('hidden', Object.keys(state.textLabelMap).length === 0);
@@ -1588,6 +1830,50 @@ $('dlMappingCsv').addEventListener('click',  () => exportMapping('csv'));
 $('dlMappingJson').addEventListener('click', () => exportMapping('json'));
 
 // ══════════════════════════════════════════════════════════════════════
+// RUN REPORT EXPORT
+// ══════════════════════════════════════════════════════════════════════
+
+/** Render the run report as a human-readable plain-text log. */
+function reportToText(r) {
+  const L = [];
+  L.push('DataMask — anonymization run report');
+  L.push('===================================');
+  L.push(`Generated:            ${r.generated_at}`);
+  L.push(`Source file:          ${r.source_file}`);
+  if (r.sheet) L.push(`Sheet:                ${r.sheet}`);
+  L.push(`Global mode:          ${r.global_mode}`);
+  if (r.lite_method) L.push(`Lite method:          ${r.lite_method}`);
+  L.push(`Modes used:           ${r.modes_used.join(', ')}`);
+  L.push(`Per-column overrides: ${r.per_column_overrides ? 'yes' : 'no'}`);
+  L.push(`Rows processed:       ${r.rows_processed}`);
+  L.push(`Columns anonymized:   ${r.columns_anonymized} of ${r.total_columns}`);
+  L.push(`Values changed:       ${r.values_changed}`);
+  L.push('');
+  L.push('Columns:');
+  r.columns.forEach(c => {
+    L.push(`  - [${c.index}] ${c.name}  (${c.type})  →  ${c.mode}${c.overridden ? '  [override]' : ''}`);
+  });
+  L.push('');
+  L.push(r.note);
+  return L.join('\n');
+}
+
+async function exportReport(format) {
+  if (!state.lastRunReport) { notify('Run an anonymization first, then download its report.', 'warn'); return; }
+  const name = await promptFilename(`${state.fileName}_${state.selMode}_report`);
+  if (!name) return;
+  if (format === 'json') {
+    dlBlob(JSON.stringify(state.lastRunReport, null, 2), name + '.json', 'application/json');
+  } else {
+    dlBlob(reportToText(state.lastRunReport), name + '.txt', 'text/plain');
+  }
+  notify(`Run report exported as ${format.toUpperCase()}.`, 'success');
+}
+
+$('dlReportJson').addEventListener('click', () => exportReport('json'));
+$('dlReportTxt').addEventListener('click',  () => exportReport('txt'));
+
+// ══════════════════════════════════════════════════════════════════════
 // RE-ANONYMIZE
 // ══════════════════════════════════════════════════════════════════════
 
@@ -1596,16 +1882,11 @@ $('reAnonymize').addEventListener('click', async () => {
   const btn  = $('reAnonymize');
   const rows = state.maskedData;
   btn.disabled = true;
-  buildTextLabelMap(rows);
-  if (state.selMode === 'vault') $('vaultProgress').classList.add('visible');
+  if (runUsesVault()) $('vaultProgress').classList.add('visible');
   try {
-    if (state.selMode === 'lite')        state.maskedData = applyLite(rows);
-    else if (state.selMode === 'strong') state.maskedData = applyStrong(rows);
-    else state.maskedData = await applyVault(rows, (done, total) => {
-      const pct = Math.round((done / total) * 100);
-      $('vaultProgressFill').style.width = pct + '%';
-      $('vaultProgressPct').textContent  = pct + '%';
-    });
+    const { masked, modesUsed } = await runAnonymization(rows, vaultProgressCb);
+    state.maskedData = masked;
+    buildRunReport(rows, masked, modesUsed);   // refresh report so a later download reflects this round
     renderResult();
     notify('Re-anonymization applied — output updated.', 'success');
   } catch (err) {
@@ -1652,6 +1933,8 @@ $('startOver').addEventListener('click', () => {
   state.colTypes       = [];
   state.maskedData     = [];
   state.textLabelMap   = {};
+  state.colModeOverrides = {};
+  state.lastRunReport  = null;
   state.lastObjectURLs = [];
   state.selectedCols.clear();
   fileInput.value = '';

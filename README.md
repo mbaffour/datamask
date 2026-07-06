@@ -21,7 +21,7 @@ DataMask was built to solve this. It gives you a clean, fast way to anonymize se
 | Mode | Method | Reversibility |
 |------|--------|--------------|
 | **Lite** | Random noise, shuffle, replace, or scale & shift | Reversible with effort |
-| **Strong** | Normalize → sigmoid distortion → cross-column mixing | Practically irreversible |
+| **Strong** | Normalize → sigmoid distortion → cross-column mixing | Hard to reverse without a reference — but monotonic, so rank order is preserved (re-identifiable by rank) |
 | **Vault** | SHA-256 per-cell seeding → PRNG synthetic values | Cryptographically irreversible |
 
 ### Text label substitution
@@ -29,6 +29,12 @@ All selected text columns (sample names, strain IDs, group labels, metadata) are
 
 ### Export formats
 Download anonymized data as `.xlsx`, `.csv`, `.tsv`, `.txt`, or `.json` — with a custom filename prompt before every download.
+
+### Per-column mode overrides
+By default every selected column uses the global mode. Optionally, assign a different tier to individual columns — e.g. keep identifiers in **Vault** while lightly perturbing measurements in **Lite** — from the collapsible "Per-column mode overrides" panel in the protection step.
+
+### Downloadable run report
+After each run you can download a reproducibility log (JSON or plain text) listing which columns were anonymized, the mode(s) used, row/column counts, and a timestamp. The report contains **no original values** and is generated entirely in-browser.
 
 ### Additional capabilities
 - Drag-and-drop or click-to-browse file upload (`.xlsx`, `.xls`, `.csv`, `.txt`)
@@ -100,7 +106,9 @@ Three-pass pipeline per numeric column:
 3. Cross-mix with adjacent selected columns at a configurable blend ratio
 4. Rescale to a randomized fake output range
 
-All distortion parameters are generated fresh each run and immediately discarded — making reversal computationally infeasible even with the full output.
+All distortion parameters are generated fresh each run and immediately discarded, so recovering the exact original values from the output alone is hard without a reference dataset.
+
+**Important limitation:** the sigmoid is a monotonic transform, so Strong mode largely **preserves the rank order of values within a column**. That means the output remains re-identifiable by rank, or by correlating it against a known reference dataset — it is *not* a substitute for true non-invertible anonymization. When you need synthetic values with no mathematical link to the originals (including no preserved ordering), use **Vault mode**.
 
 ### Vault
 For each numeric cell:
@@ -143,7 +151,6 @@ MIT — see [LICENSE](LICENSE).
 - Save and reload anonymization configurations
 - Undo/redo history
 - Batch file processing
-- Column-level mode selection (different tiers per column)
 - Reproducible anonymization via exportable seed files
 
 ---
